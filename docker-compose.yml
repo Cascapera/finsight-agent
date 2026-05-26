@@ -1,0 +1,110 @@
+services:
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL + pgvector
+  # ankane/pgvector: imagem mantida pelo criador do pgvector — extensão já compilada.
+  # Só precisamos de `CREATE EXTENSION IF NOT EXISTS vector` na migration.
+  # ─────────────────────────────────────────────
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: finsight-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-finsight}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finsight}
+      POSTGRES_DB: ${POSTGRES_DB:-finsight}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # volume nomeado: gerenciado pelo Docker Engine
+      # mais performático que bind mount no Windows/macOS
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready: utilitário nativo do Postgres que verifica se o servidor aceita conexões
+      # sem healthcheck, depends_on só espera o container iniciar, não o Postgres ficar pronto
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-finsight} -d ${POSTGRES_DB:-finsight}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - finsight-net
+
+  # ─────────────────────────────────────────────
+  # Redis
+  # redis:7-alpine: imagem mínima — Alpine reduz superfície de ataque e tamanho da imagem
+  # ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: finsight-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    # appendonly yes: persistência AOF — sobrevive a restart do container
+    # sem isso, todos os caches são perdidos ao restartar (aceitável em dev, ruim em staging)
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    networks:
+      - finsight-net
+
+  # ─────────────────────────────────────────────
+  # Prometheus
+  # scrape configurado para o FastAPI em host.docker.internal:8000/metrics
+  # ─────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: finsight-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      # bind mount para o arquivo de config — editamos localmente e o Prometheus relê
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      # retention de 15 dias — suficiente para dev, não explode o disco
+      - "--storage.tsdb.retention.time=15d"
+    networks:
+      - finsight-net
+
+  # ─────────────────────────────────────────────
+  # Grafana
+  # ─────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:latest
+    container_name: finsight-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      # desativa login em dev — não use GF_AUTH_ANONYMOUS em produção
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - finsight-net
+
+# ─────────────────────────────────────────────
+# Volumes nomeados
+# ─────────────────────────────────────────────
+volumes:
+  pgdata:
+  redisdata:
+  grafanadata:
+
+# ─────────────────────────────────────────────
+# Network isolada
+# Serviços se comunicam pelo nome do container (ex: postgres:5432)
+# em vez de localhost — evita conflito com portas do host
+# ─────────────────────────────────────────────
+networks:
+  finsight-net:
+    driver: bridge

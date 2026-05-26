@@ -1,0 +1,173 @@
+[build-system]
+# hatchling: build backend moderno da PyPA — zero config para src/ layout
+# não mistura responsabilidade de build com gestão de deps (ao contrário do poetry)
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "finsight-agent"
+version = "0.1.0"
+description = "Multi-agent system for financial asset analysis using LangGraph, pgvector and RAG"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Guilherme Cascapera", email = "gcascapera@gmail.com" }]
+
+# >=3.11: usamos match/case, X | Y union types sem Optional, tomllib nativo
+requires-python = ">=3.11"
+
+dependencies = [
+    # --- Orquestração de agentes ---
+    # langgraph 0.2+: fan-out paralelo estável + streaming de eventos por nó
+    "langgraph>=0.2.0",
+
+    # --- LLM + Embeddings ---
+    # langchain-openai encapsula ChatOpenAI e OpenAIEmbeddings no mesmo pacote
+    "langchain-openai>=0.2.0",
+    "langchain-community>=0.3.0",   # Tavily retriever, PyPDF loader
+    "openai>=1.40.0",               # dep transitiva explícita — evita upgrades silenciosos
+
+    # --- Web Search ---
+    "tavily-python>=0.3.0",
+
+    # --- Dados financeiros ---
+    "yfinance>=0.2.40",
+    "pandas>=2.0.0",   # dep transitiva do yfinance — versão explícita evita breaking changes
+    "numpy>=1.26.0",   # cálculos de Sharpe, VaR, volatilidade
+
+    # --- API ---
+    # uvicorn[standard]: inclui httptools (parser HTTP em C) e uvloop (event loop em C)
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    # sse-starlette: gerencia reconexão e event IDs — melhor que StreamingResponse puro
+    "sse-starlette>=2.1.0",
+
+    # --- Banco de dados ---
+    # sqlalchemy[asyncio]: habilita AsyncSession e create_async_engine
+    "sqlalchemy[asyncio]>=2.0.0",
+    # asyncpg: driver PostgreSQL pure-async em Cython — melhor throughput para batch inserts
+    "asyncpg>=0.29.0",
+    # pgvector: adiciona tipo VECTOR ao SQLAlchemy e operadores cosine/L2/inner product
+    "pgvector>=0.3.0",
+    # alembic: migrations com autogenerate via metadata SQLAlchemy
+    "alembic>=1.13.0",
+    # psycopg2-binary: driver síncrono usado exclusivamente pelo Alembic
+    # o app usa asyncpg, mas o env.py do Alembic roda em contexto síncrono
+    "psycopg2-binary>=2.9.9",
+
+    # --- Cache ---
+    # redis[hiredis]: parser de protocolo RESP em C — ~10x mais rápido para pipelines
+    "redis[hiredis]>=5.0.0",
+
+    # --- Configuração ---
+    # pydantic-settings: lê .env e valida com type hints
+    # variável faltante quebra na inicialização, não em runtime silencioso
+    "pydantic-settings>=2.3.0",
+    "pydantic>=2.7.0",
+
+    # --- HTTP client ---
+    # httpx: cliente async — mesmo usado internamente pelo FastAPI TestClient
+    "httpx>=0.27.0",
+
+    # --- Tokenização ---
+    # tiktoken: contador de tokens OpenAI — calcula custo antes de enviar + chunking seguro
+    "tiktoken>=0.7.0",
+
+    # --- Observabilidade ---
+    "langsmith>=0.1.80",
+    "prometheus-client>=0.20.0",
+
+    # --- PDF parsing ---
+    # pypdf: parser puro Python, sem deps nativas (sem poppler/ghostscript)
+    "pypdf>=4.2.0",
+]
+
+[project.optional-dependencies]
+# dev não vai para o Dockerfile de produção — imagem menor, menos superfície de ataque
+dev = [
+    # pytest-asyncio: suporte a `async def test_*` sem boilerplate de event loop manual
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.14.0",
+    "anyio>=4.4.0",
+
+    # ruff: substitui flake8 + black + isort em uma ferramenta (escrita em Rust)
+    "ruff>=0.4.0",
+
+    # mypy strict mode + plugin SQLAlchemy para inferência de tipos em mapped_column
+    "mypy>=1.10.0",
+    "sqlalchemy[mypy]>=2.0.0",
+
+    # ragas: faithfulness, answer_relevance, context_recall — pipeline de eval no CI
+    "ragas>=0.1.9",
+]
+
+[project.scripts]
+# entry point para rodar o servidor: `finsight-serve` no terminal
+finsight-serve = "finsight.api.main:run"
+
+# ─────────────────────────────────────────────
+# hatchling
+# ─────────────────────────────────────────────
+[tool.hatch.build.targets.wheel]
+# src/ layout: sem isso, hatchling procuraria finsight/ na raiz
+packages = ["src/finsight"]
+
+# ─────────────────────────────────────────────
+# ruff
+# ─────────────────────────────────────────────
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes — imports não usados, variáveis indefinidas
+    "I",   # isort — ordem de imports
+    "B",   # flake8-bugbear — erros comuns de lógica
+    "C4",  # comprehensions desnecessários
+    "UP",  # pyupgrade — sintaxe moderna: f-strings, X | Y, etc.
+    "ANN", # type hints obrigatórios
+    "RUF", # regras específicas do ruff
+]
+ignore = [
+    "ANN101", # self não precisa de type hint
+    "ANN102", # cls não precisa de type hint
+    "ANN401", # permite Any quando explicitamente necessário
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["finsight"]
+
+# ─────────────────────────────────────────────
+# mypy
+# ─────────────────────────────────────────────
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+plugins = ["sqlalchemy.ext.mypy.plugin"]
+
+[[tool.mypy.overrides]]
+# libs sem stubs oficiais — ignora erros de import
+module = ["yfinance.*", "tavily.*", "ragas.*", "pgvector.*", "langsmith.*"]
+ignore_missing_imports = true
+
+# ─────────────────────────────────────────────
+# pytest
+# ─────────────────────────────────────────────
+[tool.pytest.ini_options]
+# asyncio_mode = "auto": todo async def test_* vira coroutine sem decorador extra
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: requer Postgres + Redis rodando (docker-compose up)",
+    "slow: faz download de dados reais via yfinance",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:langchain.*",
+    "ignore::DeprecationWarning:pydantic.*",
+]

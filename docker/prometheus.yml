@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s      # coleta métricas a cada 15s
+  evaluation_interval: 15s  # avalia alertas a cada 15s
+
+scrape_configs:
+  - job_name: "finsight-api"
+    # host.docker.internal: DNS especial do Docker para acessar o host a partir de um container
+    # O FastAPI roda no host (não dentro do compose) durante o desenvolvimento
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+    metrics_path: "/metrics"
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
