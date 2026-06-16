@@ -1,21 +1,23 @@
 """
 Alembic environment — configura como as migrations são executadas.
 
-Reescrito para suportar AsyncEngine (asyncpg).
-O env.py padrão do `alembic init` usa conexão síncrona — incompatível com asyncpg.
+Migrations rodam de forma SÍNCRONA (psycopg2), que é o padrão recomendado do
+Alembic — mais simples e sem o overhead de adaptar a API síncrona do Alembic
+para async. O app em runtime continua 100% async (asyncpg) via session.py;
+apenas as migrations usam o driver síncrono.
 """
 
-import asyncio
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Importamos Base para que o autogenerate detecte os modelos.
 # A importação de models garante que as classes sejam registradas no metadata.
-from finsight.db.models import Base  # noqa: F401 — importação necessária para registro
+# A importação de Base também registra os modelos no metadata (usado em
+# target_metadata abaixo para o autogenerate).
+from finsight.db.models import Base
 from finsight.db.session import settings
 
 # config: objeto que lê o alembic.ini
@@ -71,34 +73,26 @@ def do_run_migrations(connection: Connection) -> None:
         context.run_migrations()
 
 
-async def run_async_migrations() -> None:
+def run_migrations_online() -> None:
     """
-    Modo online com AsyncEngine.
+    Modo online com Engine síncrono (psycopg2).
 
-    Cria um engine temporário (NullPool — sem pool para migrations),
-    obtém uma conexão síncrona via run_sync, e executa as migrations.
+    Cria um Engine temporário a partir das configs do alembic.ini (onde
+    sqlalchemy.url já foi sobrescrita por database_url_sync acima), abre uma
+    conexão e executa as migrations diretamente — sem corrotina.
 
-    Por que run_sync? O Alembic internamente usa a API síncrona de Connection.
-    AsyncConnection.run_sync() adapta essa API síncrona para o contexto async.
+    poolclass=NullPool: sem pool — migrations abrem e fecham conexão individualmente.
     """
-    # async_engine_from_config: cria AsyncEngine a partir das configs do alembic.ini
-    # poolclass=NullPool: sem pool — cada migration abre e fecha conexão individualmente
-    connectable = async_engine_from_config(
+    connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
-    async with connectable.connect() as connection:
-        # run_sync: executa a função síncrona `do_run_migrations` dentro do contexto async
-        await connection.run_sync(do_run_migrations)
+    with connectable.connect() as connection:
+        do_run_migrations(connection)
 
-    await connectable.dispose()
-
-
-def run_migrations_online() -> None:
-    """Entry point para o modo online — chamado pelo Alembic automaticamente."""
-    asyncio.run(run_async_migrations())
+    connectable.dispose()
 
 
 if context.is_offline_mode():

@@ -1,0 +1,92 @@
+{
+  "permissions": {
+    "allow": [
+
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push)",
+      "Bash(git push origin*)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git diff*)",
+      "Bash(git branch*)",
+      "Bash(git checkout*)",
+      "Bash(git stash*)",
+      "Bash(git fetch*)",
+      "Bash(git pull*)",
+      "Bash(git merge --no-ff*)",
+
+      "Bash(pip install*)",
+      "Bash(pip show*)",
+      "Bash(uv add*)",
+      "Bash(uv sync*)",
+      "Bash(uv run*)",
+
+      "Bash(python*)",
+      "Bash(pytest*)",
+      "Bash(ruff*)",
+      "Bash(mypy*)",
+      "Bash(uvicorn*)",
+
+      "Bash(docker compose up*)",
+      "Bash(docker compose down*)",
+      "Bash(docker compose logs*)",
+      "Bash(docker compose ps*)",
+      "Bash(docker compose build*)",
+      "Bash(docker compose restart*)",
+      "Bash(docker build*)",
+      "Bash(docker ps*)",
+      "Bash(docker logs*)",
+      "Bash(docker exec*)",
+
+      "Bash(alembic*)",
+
+      "Bash(mkdir*)",
+      "Bash(touch*)",
+      "Bash(cp*)",
+      "Bash(mv*)",
+      "Bash(cat*)",
+      "Bash(ls*)",
+      "Bash(find*)",
+      "Bash(grep*)",
+      "Bash(echo*)",
+      "Bash(curl*)",
+      "Bash(which*)",
+      "Bash(export*)",
+      "Bash(source*)",
+
+      "Bash(psql*)",
+      "Bash(redis-cli*)"
+
+    ],
+    "deny": [
+
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(git rebase*)",
+      "Bash(git cherry-pick*)",
+      "Bash(gh pr*)",
+      "Bash(gh release*)",
+
+      "Bash(rm -rf*)",
+      "Bash(rm -r*)",
+      "Bash(rmdir*)",
+      "Bash(shred*)",
+
+      "Bash(docker system prune*)",
+      "Bash(docker volume rm*)",
+      "Bash(docker network rm*)",
+
+      "Bash(DROP DATABASE*)",
+      "Bash(DROP TABLE*)",
+      "Bash(TRUNCATE*)",
+      "Bash(DELETE FROM*)",
+
+      "Bash(sudo rm*)",
+      "Bash(sudo chmod 777*)",
+      "Bash(sudo dd*)"
+
+    ]
+  }
+}

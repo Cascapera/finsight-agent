@@ -162,6 +162,13 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 # asyncio_mode = "auto": todo async def test_* vira coroutine sem decorador extra
 asyncio_mode = "auto"
+# Um único event loop para TODA a sessão de testes (testes + fixtures).
+# O engine async é criado no nível de módulo (finsight.db.session) com pool de
+# conexões. Com loop por função (default), as conexões do pool ficam presas ao
+# loop do 1º teste; quando ele fecha, o teardown dos testes seguintes quebra com
+# "Event loop is closed" (visível no Windows/ProactorEventLoop com asyncpg).
+asyncio_default_test_loop_scope = "session"
+asyncio_default_fixture_loop_scope = "session"
 testpaths = ["tests"]
 markers = [
     "integration: requer Postgres + Redis rodando (docker-compose up)",
