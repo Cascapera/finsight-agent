@@ -24,7 +24,7 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 
 - [x] Estrutura de pastas do projeto
 - [x] `src/finsight/graph/state.py` — AgentState + modelos Pydantic
-- [x] Semana 2: infra base + pgvector + ingestão de PDFs (falta só o CI)
+- [x] Semana 2: infra base + pgvector + ingestão de PDFs + CI (GitHub Actions)
 - [ ] Semana 3: RAG avançado (HyDE, re-ranking)
 - [ ] Semana 4: RAGAS eval suite
 - [ ] Semana 5: Orchestrator + Research + Financial Agent
@@ -32,8 +32,11 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [ ] Semana 7: Observabilidade (LangSmith + Prometheus)
 - [ ] Semana 8: Deploy Fly.io + README final
 
-**Semana atual:** 2 — infra base + pgvector
-**Próximo passo:** Semana 2, passo 11 — GitHub Actions CI básico (lint + testes, sem chamadas reais ao OpenAI)
+**Semana atual:** 3 — RAG avançado (HyDE, re-ranking)
+**Semana 2 — CONCLUÍDA** (2026-06-16): CI completo no GitHub Actions (`.github/workflows/ci.yml`)
+com jobs lint (ruff + format + mypy strict) e test (pytest c/ service container pgvector).
+Tudo verde local e commitado.
+**Próximo passo:** iniciar Semana 3. Detalhes/contexto: memória `project_state.md`.
 
 ## Arquitetura
 
