@@ -133,8 +133,6 @@ select = [
     "RUF", # regras específicas do ruff
 ]
 ignore = [
-    "ANN101", # self não precisa de type hint
-    "ANN102", # cls não precisa de type hint
     "ANN401", # permite Any quando explicitamente necessário
 ]
 
@@ -153,7 +151,15 @@ plugins = ["sqlalchemy.ext.mypy.plugin"]
 
 [[tool.mypy.overrides]]
 # libs sem stubs oficiais — ignora erros de import
-module = ["yfinance.*", "tavily.*", "ragas.*", "pgvector.*", "langsmith.*"]
+module = [
+    "yfinance.*",
+    "tavily.*",
+    "ragas.*",
+    "pgvector.*",
+    "langsmith.*",
+    "langchain_text_splitters.*",
+    "pypdf.*",
+]
 ignore_missing_imports = true
 
 # ─────────────────────────────────────────────

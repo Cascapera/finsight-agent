@@ -43,10 +43,7 @@ def _make_fake_create(dim: int = EMBEDDING_DIM) -> Any:
     """
 
     async def fake_create(*, model: str, input: list[str]) -> Any:
-        data = [
-            SimpleNamespace(index=i, embedding=[0.1] * dim)
-            for i in range(len(input))
-        ]
+        data = [SimpleNamespace(index=i, embedding=[0.1] * dim) for i in range(len(input))]
         usage = SimpleNamespace(total_tokens=sum(len(t.split()) for t in input))
         return SimpleNamespace(data=data, usage=usage)
 
@@ -84,9 +81,7 @@ async def test_embed_and_index_pipeline(
     mocker: Any,
 ) -> None:
     # Mocka o client OpenAI no embedder — sem rede, sem custo.
-    fake_client = SimpleNamespace(
-        embeddings=SimpleNamespace(create=_make_fake_create())
-    )
+    fake_client = SimpleNamespace(embeddings=SimpleNamespace(create=_make_fake_create()))
     mocker.patch(
         "finsight.ingestion.embedder._get_client",
         return_value=fake_client,

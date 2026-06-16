@@ -13,12 +13,12 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine import Connection
 
-# Importamos Base para que o autogenerate detecte os modelos.
-# A importação de models garante que as classes sejam registradas no metadata.
-# A importação de Base também registra os modelos no metadata (usado em
-# target_metadata abaixo para o autogenerate).
-from finsight.db.models import Base
-from finsight.db.session import settings
+# Base é a DeclarativeBase real, definida em session.py — importamos da fonte
+# para o mypy strict (sem implicit re-export) não reclamar.
+# `import finsight.db.models` (noqa F401) tem o efeito colateral de registrar
+# Document/DocumentChunk no Base.metadata, que é o que o autogenerate compara.
+import finsight.db.models  # noqa: F401
+from finsight.db.session import Base, settings
 
 # config: objeto que lê o alembic.ini
 config = context.config

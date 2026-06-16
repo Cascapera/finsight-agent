@@ -5,9 +5,9 @@ Configuração do banco de dados: Settings, engine async e session factory.
 """
 
 from collections.abc import AsyncGenerator
-from typing import Annotated
+from typing import Annotated, Any
 
-from pydantic import PostgresDsn, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
-
 
 # ---------------------------------------------------------------------------
 # Settings — lê .env e valida tipos na inicialização
@@ -149,7 +148,9 @@ class Settings(BaseSettings):
 
 # Instância global — importada pelos outros módulos
 # Criada uma vez no startup, não a cada request
-settings = Settings()
+# Nota: os campos obrigatórios (openai_api_key, tavily_api_key) vêm do .env em
+# runtime; o mypy não enxerga isso e exigiria passá-los aqui, daí o ignore abaixo.
+settings = Settings()  # type: ignore[call-arg]
 
 
 # ---------------------------------------------------------------------------
@@ -166,7 +167,7 @@ def create_engine(*, for_alembic: bool = False) -> AsyncEngine:
                      para que o Alembic não tente reusar conexões async em
                      contexto síncrono (causa deadlock).
     """
-    kwargs: dict = {
+    kwargs: dict[str, Any] = {
         "echo": not settings.is_production,  # loga SQL em dev, silencia em prod
     }
 

@@ -6,6 +6,7 @@ O Alembic detecta mudanças aqui via autogenerate e gera as migrations.
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import ForeignKey, Index, Integer, Text, func
@@ -91,9 +92,7 @@ class DocumentChunk(Base):
     # Vector(1536): dimensão do text-embedding-3-small da OpenAI.
     # Mudar o modelo de embedding requer re-indexar todos os chunks
     # (dimensões incompatíveis causam erro no operador de similaridade).
-    embedding: Mapped[list[float] | None] = mapped_column(
-        Vector(1536), nullable=True
-    )
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536), nullable=True)
 
     # chunk_index: posição do chunk no documento original.
     # Útil para reconstruir contexto: se o chunk relevante é o índice 5,
@@ -102,7 +101,7 @@ class DocumentChunk(Base):
 
     # JSONB: metadados flexíveis por chunk (página do PDF, seção, etc.)
     # JSONB é indexável — diferente de JSON puro no Postgres
-    metadata_: Mapped[dict | None] = mapped_column(
+    metadata_: Mapped[dict[str, Any] | None] = mapped_column(
         "metadata",  # nome da coluna no banco é "metadata" (sem underscore)
         JSONB,
         nullable=True,
@@ -114,9 +113,7 @@ class DocumentChunk(Base):
         nullable=False,
     )
 
-    document: Mapped["Document"] = relationship(
-        "Document", back_populates="chunks"
-    )
+    document: Mapped["Document"] = relationship("Document", back_populates="chunks")
 
     # Índice ivfflat para busca por similaridade vetorial.
     # Definido como __table_args__ porque envolve um operador customizado do pgvector

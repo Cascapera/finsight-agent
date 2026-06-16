@@ -6,7 +6,9 @@ dividir em chunks respeitando limites de token, retornar chunks com metadados.
 """
 
 import io
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from typing import Any
 
 import tiktoken
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -26,10 +28,10 @@ class ChunkResult:
 
     content: str
     chunk_index: int
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
-def _build_length_function(encoding_name: str = "cl100k_base"):
+def _build_length_function(encoding_name: str = "cl100k_base") -> Callable[[str], int]:
     """
     Retorna uma função que conta tokens usando tiktoken.
 

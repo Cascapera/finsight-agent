@@ -15,6 +15,7 @@ LangSmith de fato agrega valor.
 import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import Any
 
 from openai import AsyncOpenAI
 
@@ -59,7 +60,7 @@ class EmbeddedChunk:
     content: str
     chunk_index: int
     embedding: list[float]
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------

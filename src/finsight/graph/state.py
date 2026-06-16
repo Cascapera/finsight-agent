@@ -10,7 +10,6 @@ from typing import Annotated, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 # ---------------------------------------------------------------------------
 # Modelos de output — um por agente especializado
 # Usam BaseModel (não TypedDict) porque são validados via structured output
@@ -35,12 +34,8 @@ class ResearchOutput(BaseModel):
     key_events: list[str] = Field(
         description="Lista de eventos relevantes encontrados nas notícias"
     )
-    confidence: float = Field(
-        ge=0.0, le=1.0, description="Confiança do agente na análise (0-1)"
-    )
-    sources: list[str] = Field(
-        default_factory=list, description="URLs das fontes consultadas"
-    )
+    confidence: float = Field(ge=0.0, le=1.0, description="Confiança do agente na análise (0-1)")
+    sources: list[str] = Field(default_factory=list, description="URLs das fontes consultadas")
 
 
 class FinancialOutput(BaseModel):
@@ -97,13 +92,9 @@ class FinalAnswer(BaseModel):
     key_points: list[str] = Field(
         description="Pontos principais da análise em formato de bullet points"
     )
-    risk_factors: list[str] = Field(
-        description="Fatores de risco identificados para o ativo"
-    )
+    risk_factors: list[str] = Field(description="Fatores de risco identificados para o ativo")
     # disclaimer fixo — não gerado pelo LLM, garantido pelo schema
-    disclaimer: str = Field(
-        default="Esta análise não constitui recomendação de investimento."
-    )
+    disclaimer: str = Field(default="Esta análise não constitui recomendação de investimento.")
 
 
 # ---------------------------------------------------------------------------
@@ -123,8 +114,8 @@ class FinalAnswer(BaseModel):
 class AgentState(TypedDict):
     # --- Inputs (definidos na entrada da query) ---
     query: str
-    ticker: str       # ex: "PETR4", "VALE3", "KNRI11"
-    asset_type: str   # ex: "stock", "fii", "etf"
+    ticker: str  # ex: "PETR4", "VALE3", "KNRI11"
+    asset_type: str  # ex: "stock", "fii", "etf"
 
     # --- Outputs dos agentes (None até o agente respectivo completar) ---
     # Opcionais explícitos: o orquestrador precisa checar se o agente já rodou
@@ -136,7 +127,7 @@ class AgentState(TypedDict):
 
     # --- Controle de execução ---
     execution_id: str  # UUID gerado na entrada — usado para correlacionar logs/traces
-    cached: bool       # True se a resposta veio do Redis; False se foi computada agora
+    cached: bool  # True se a resposta veio do Redis; False se foi computada agora
 
     # Annotated com reducer `add`: lista acumulada de erros de todos os nós.
     # Cada nó captura suas exceções e faz `return {"errors": ["mensagem"]}`.
