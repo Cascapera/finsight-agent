@@ -1,0 +1,108 @@
+name: CI
+
+# Quando rodar:
+# - push em main: valida o que já foi mergeado (rede de segurança)
+# - pull_request para main: valida ANTES do merge (é aqui que o CI mais agrega)
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancela runs antigos da mesma branch/PR quando você dá push de novo —
+# economiza minutos de runner e evita ver resultado de commit já obsoleto.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Job 1: lint — estático, rápido, NÃO precisa de banco.
+  # Roda em paralelo com o job de teste (jobs são independentes por padrão).
+  # ─────────────────────────────────────────────
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          # cache do pip baseado no hash do pyproject — reinstala só quando deps mudam
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # Para lint só precisamos das ferramentas (ruff, mypy) e dos stubs/types das
+      # libs que o mypy importa — então instalamos o extra [dev] completo.
+      # -e (editable) para o mypy resolver o pacote finsight em src/.
+      - name: Install deps
+        run: pip install -e ".[dev]"
+
+      - name: ruff check
+        run: ruff check .
+
+      - name: ruff format --check
+        run: ruff format --check .
+
+      - name: mypy
+        run: mypy src
+
+  # ─────────────────────────────────────────────
+  # Job 2: test — precisa de Postgres + pgvector REAL (teste de integração).
+  # ─────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+
+    # Service containers: o GitHub sobe esses containers ao lado do job.
+    # Como o job roda direto no runner (não dentro de container), acessamos o
+    # Postgres via localhost na porta mapeada abaixo.
+    services:
+      postgres:
+        image: ankane/pgvector:latest # mesma imagem do docker-compose.yml
+        env:
+          POSTGRES_USER: finsight
+          POSTGRES_PASSWORD: finsight
+          POSTGRES_DB: finsight
+        ports:
+          - 5432:5432
+        # health check: o job só começa os steps quando o Postgres aceita conexões.
+        # Sem isso, o `alembic upgrade head` pode rodar antes do banco estar pronto.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    # Variáveis de ambiente do job inteiro.
+    # As chaves de API são DUMMY: os testes mockam a OpenAI, mas a classe Settings
+    # exige openai_api_key/tavily_api_key já no import (não têm default), então
+    # precisam existir para o `from finsight.db.session import ...` não quebrar.
+    env:
+      OPENAI_API_KEY: dummy-key-for-ci
+      TAVILY_API_KEY: dummy-key-for-ci
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: finsight
+      POSTGRES_PASSWORD: finsight
+      POSTGRES_DB: finsight
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install deps
+        run: pip install -e ".[dev]"
+
+      # Aplica as migrations no banco do CI — cria as tabelas + extensão vector.
+      # O env.py do Alembic lê as POSTGRES_* do ambiente via Settings.
+      - name: Run migrations
+        run: alembic upgrade head
+
+      # Roda TODOS os testes, incluindo os marcados @integration (Postgres está up).
+      - name: pytest
+        run: pytest
