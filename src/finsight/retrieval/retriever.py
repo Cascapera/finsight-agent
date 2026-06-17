@@ -77,45 +77,32 @@ async def _session_scope(session: AsyncSession | None) -> AsyncIterator[AsyncSes
             yield owned
 
 
-async def retrieve(
-    query: str,
+async def search_by_embedding(
+    embedding: list[float],
     *,
     ticker: str | None = None,
     top_k: int = DEFAULT_TOP_K,
     session: AsyncSession | None = None,
 ) -> list[RetrievedChunk]:
     """
-    Recupera os `top_k` chunks mais similares à `query`.
+    Busca os `top_k` chunks mais similares a um EMBEDDING já calculado.
+
+    É a primitiva de busca, separada de `retrieve` de propósito: quem fornece o
+    vetor pode ser a query crua (retrieve), o documento hipotético do HyDE, ou
+    uma média de vetores. Manter a busca AGNÓSTICA à origem do vetor é o que
+    torna HyDE — e depois o re-ranking — componíveis sobre a mesma base.
 
     Args:
-        query: pergunta do usuário em linguagem natural.
-        ticker: se informado, restringe a busca aos documentos daquele ativo
-                (JOIN com documents.ticker). É keyword-only (`*`) de propósito:
-                força o call-site a escrever `retrieve(q, ticker="PETR4")`, que
-                é auto-documentado, em vez de um segundo posicional ambíguo.
+        embedding: vetor de consulta (dimensão 1536).
+        ticker: se informado, restringe a busca aos documentos daquele ativo.
         top_k: quantos chunks devolver.
-        session: sessão a reusar (emprestada). Se None, abre a própria. Ver
+        session: sessão a reusar (emprestada); se None, abre a própria. Ver
                  _session_scope.
 
     Returns:
         Lista de RetrievedChunk ORDENADA do mais relevante para o menos.
-        Lista vazia se a query for vazia ou nada casar.
     """
-    # Guard clause: query vazia não tem o que buscar. Evita gastar uma chamada
-    # de embedding (custo) e uma query ao banco para retornar nada.
-    if not query.strip():
-        return []
-
-    # 1) Embedar a query com o MESMO modelo da ingestão.
-    # embed_texts recebe e devolve listas (é batch por natureza); passamos uma
-    # query e pegamos o primeiro (e único) vetor. Reusar esta função — em vez de
-    # chamar a OpenAI aqui de novo — garante dois invariantes de graça:
-    #   (a) a query é embedada exatamente como os chunks foram (mesmo modelo,
-    #       mesma validação de dimensão 1536);
-    #   (b) é o mesmo ponto que os testes mockam — o retriever herda o mock.
-    query_embedding = (await embed_texts([query]))[0]
-
-    # 2) Montar a busca por similaridade.
+    # Montar a busca por similaridade.
     #
     # `.cosine_distance(vec)` é um método que o pgvector injeta na coluna Vector.
     # Ele gera o operador `<=>` do Postgres — DISTÂNCIA de cosseno, não
@@ -127,7 +114,7 @@ async def retrieve(
     #
     # Damos um .label() para conseguir referenciar a mesma expressão no SELECT e
     # no ORDER BY sem recalcular — e para extrair o valor da Row depois.
-    distance = DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
+    distance = DocumentChunk.embedding.cosine_distance(embedding).label("distance")
 
     stmt = (
         # Selecionamos a entidade chunk, a entidade document (para o título) e a
@@ -152,13 +139,13 @@ async def retrieve(
     if ticker is not None:
         stmt = stmt.where(Document.ticker == ticker)
 
-    # 3) Executar dentro de uma sessão async (própria ou emprestada — ver
+    # Executar dentro de uma sessão async (própria ou emprestada — ver
     # _session_scope). Como é só leitura, não há commit.
     async with _session_scope(session) as s:
         result = await s.execute(stmt)
         rows = result.all()
 
-    # 4) Traduzir Rows -> RetrievedChunk, convertendo distância em similaridade.
+    # Traduzir Rows -> RetrievedChunk, convertendo distância em similaridade.
     return [
         RetrievedChunk(
             content=chunk.content,
@@ -173,6 +160,44 @@ async def retrieve(
         )
         for chunk, doc, distance_value in rows
     ]
+
+
+async def retrieve(
+    query: str,
+    *,
+    ticker: str | None = None,
+    top_k: int = DEFAULT_TOP_K,
+    session: AsyncSession | None = None,
+) -> list[RetrievedChunk]:
+    """
+    Recupera os `top_k` chunks mais similares à `query` (busca vetorial direta).
+
+    Conveniência sobre `search_by_embedding`: embeda a query crua e delega. É o
+    caminho "baseline" do RAG — sem HyDE, sem re-ranking. Comparar este baseline
+    com o HyDE é justamente como se mede o ganho de cada técnica.
+
+    Args:
+        query: pergunta do usuário em linguagem natural.
+        ticker: se informado, restringe a busca aos documentos daquele ativo.
+                É keyword-only (`*`) de propósito: força `retrieve(q, ticker=...)`,
+                auto-documentado, em vez de um segundo posicional ambíguo.
+        top_k: quantos chunks devolver.
+        session: sessão a reusar (emprestada). Se None, abre a própria.
+
+    Returns:
+        Lista de RetrievedChunk ORDENADA do mais relevante para o menos.
+        Lista vazia se a query for vazia.
+    """
+    # Guard clause: query vazia não tem o que buscar. Evita gastar uma chamada
+    # de embedding (custo) e uma ida ao banco para retornar nada.
+    if not query.strip():
+        return []
+
+    # Embeda a query com o MESMO modelo da ingestão. Reusar embed_texts garante
+    # (a) mesmo modelo/dimensão dos chunks e (b) o mesmo ponto de mock nos testes.
+    query_embedding = (await embed_texts([query]))[0]
+
+    return await search_by_embedding(query_embedding, ticker=ticker, top_k=top_k, session=session)
 
 
 def to_rag_output(chunks: list[RetrievedChunk]) -> RAGOutput:
