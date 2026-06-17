@@ -25,7 +25,7 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [x] Estrutura de pastas do projeto
 - [x] `src/finsight/graph/state.py` — AgentState + modelos Pydantic
 - [x] Semana 2: infra base + pgvector + ingestão de PDFs + CI (GitHub Actions)
-- [ ] Semana 3: RAG avançado (HyDE, re-ranking)
+- [~] Semana 3: RAG avançado — retriever base ✅, HyDE ✅, re-ranking ⬜ (em andamento)
 - [ ] Semana 4: RAGAS eval suite
 - [ ] Semana 5: Orchestrator + Research + Financial Agent
 - [ ] Semana 6: RAG Agent + API SSE completa
@@ -33,10 +33,20 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [ ] Semana 8: Deploy Fly.io + README final
 
 **Semana atual:** 3 — RAG avançado (HyDE, re-ranking)
-**Semana 2 — CONCLUÍDA** (2026-06-16): CI completo no GitHub Actions (`.github/workflows/ci.yml`)
-com jobs lint (ruff + format + mypy strict) e test (pytest c/ service container pgvector).
-Tudo verde local e commitado.
-**Próximo passo:** iniciar Semana 3. Detalhes/contexto: memória `project_state.md`.
+
+**Onde paramos (2026-06-16, retomar amanhã):**
+- ✅ Passo 1 — retriever base (`src/finsight/retrieval/retriever.py`): busca cosine no
+  pgvector, filtro por ticker, `search_by_embedding` (primitiva) + `retrieve` + `to_rag_output`.
+  Commit `61e9fd2`.
+- ✅ Passo 2 — HyDE (`src/finsight/retrieval/hyde.py`): doc hipotético → embedding → busca.
+  Commit `5df6680`. CI verde.
+- ⬜ **PRÓXIMO: Passo 3 — RE-RANKING** (o que o Guilherme mais quer dominar). Plano: over-fetch
+  (buscar top_k grande, ex. 20) → reordenar com scorer mais preciso → devolver top_n (ex. 5).
+  Ensinar a fundo: cross-encoder vs LLM-as-judge, trade-off latência/custo/precisão. Vai compor
+  sobre `search_by_embedding`/`retrieve`/`hyde_retrieve`.
+- Depois: Passo 4 — testes RAGAS ficam pra Semana 4.
+
+10 testes verdes (retriever + HyDE + ingestão). Detalhes completos: memória `project_state.md`.
 
 ## Arquitetura
 
