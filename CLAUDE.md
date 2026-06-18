@@ -26,30 +26,35 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [x] `src/finsight/graph/state.py` — AgentState + modelos Pydantic
 - [x] Semana 2: infra base + pgvector + ingestão de PDFs + CI (GitHub Actions)
 - [x] Semana 3: RAG avançado — retriever base ✅, HyDE ✅, re-ranking ✅
-- [ ] Semana 4: RAGAS eval suite
+- [~] Semana 4: eval suite de RAG — dataset ✅, generator ✅, métricas ⬜, runner ⬜ (métricas próprias, não ragas-lib)
 - [ ] Semana 5: Orchestrator + Research + Financial Agent
 - [ ] Semana 6: RAG Agent + API SSE completa
 - [ ] Semana 7: Observabilidade (LangSmith + Prometheus)
 - [ ] Semana 8: Deploy Fly.io + README final
 
-**Semana atual:** 3 CONCLUÍDA — próxima é a Semana 4 (RAGAS eval suite)
+**Semana atual:** 4 EM ANDAMENTO (Passos 1-2 feitos) — eval suite de RAG
 
-**Onde paramos (2026-06-17):**
-- ✅ Passo 1 — retriever base (`src/finsight/retrieval/retriever.py`): busca cosine no
-  pgvector, filtro por ticker, `search_by_embedding` (primitiva) + `retrieve` + `to_rag_output`.
-  Commit `61e9fd2`.
-- ✅ Passo 2 — HyDE (`src/finsight/retrieval/hyde.py`): doc hipotético → embedding → busca.
-  Commit `5df6680`. CI verde.
-- ✅ Passo 3 — RE-RANKING (`src/finsight/retrieval/reranker.py`): over-fetch (fetch_k=20) →
-  LLM-as-judge listwise (structured output) → top_n=5. `rerank` (primitiva, agnóstica à origem
-  dos candidatos) + `retrieve_and_rerank` (compõe sobre retrieve/hyde_retrieve, `use_hyde` empilha
-  as duas técnicas). Ordena pela `relevance` do juiz (fonte de verdade, mantém scores decrescentes).
-  Score reescrito = relevance/10; cosine preservado em `metadata["vector_score"]`. Pós-processamento
-  defensivo (ignora índice alucinado/duplicado, anexa omitidos no fim — nunca perde chunk).
-  Gancho didático: cross-encoder entraria no lugar de `rerank` (mesma assinatura).
-- ⬜ **PRÓXIMO: Semana 4 — RAGAS eval suite.**
+**Decisão Semana 4 (2026-06-18):** RAGAS-a-biblioteca NÃO importa na stack
+langchain v1 (`langchain_community 0.4.2` removeu `chat_models.vertexai`, que TODA
+versão do ragas até a 0.4.3 importa incondicionalmente). Guilherme escolheu
+**construir as métricas nós mesmos** (LLM-as-judge, mesmo padrão do reranker) —
+mockáveis, CI sem rede, zero dep frágil. RAGAS fica como referência conceitual.
+TODO de limpeza: remover `ragas` do pyproject no fim da semana.
 
-18 testes verdes (retriever + HyDE + reranker + ingestão). Detalhes completos: memória `project_state.md`.
+**Onde paramos (2026-06-18) — Semana 4:**
+- ✅ Passo 1 — `evals/dataset.py`: `EvalSample`/`EvalDataset` (Pydantic strict),
+  golden set. Mapa métrica→campo no topo do arquivo. `from_json`/`to_json`,
+  `filter_by_ticker`, `SEED_DATASET` (3 casos fictícios "Petro Norte"). Commit `154276b`.
+- ✅ Passo 2 — `evals/generator.py`: o "G" do RAG. `generate_answer(question, contexts)`
+  ancora SÓ no contexto (recusa se faltar info — é o que faithfulness mede). Agnóstico à
+  origem dos chunks, temperature=0.0, client mockável. Guard de contexto vazio → recusa
+  determinística sem LLM. Commit `0e2a0e7`.
+- ⬜ **PRÓXIMO: Passo 3 — `evals/metrics.py`**: 4 métricas LLM-as-judge (faithfulness,
+  answer_relevancy, context_precision, context_recall). Depois Passo 4 = `runner.py`
+  (roda baseline/HyDE/rerank sobre o golden set → tabela comparativa).
+
+Semana 3 (CONCLUÍDA): retriever base (`61e9fd2`), HyDE (`5df6680`), re-ranking (`84fa275`).
+26 testes verdes (18 da Semana 3 + 8 novos: dataset + generator). Detalhes: memória `project_state.md`.
 
 ## Arquitetura
 
