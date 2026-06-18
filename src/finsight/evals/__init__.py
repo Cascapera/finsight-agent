@@ -6,10 +6,12 @@ from finsight.evals.dataset import (
     EvalDataset,
     EvalSample,
 )
+from finsight.evals.generator import generate_answer
 
 __all__ = [
     "SEED_DATASET",
     "SEED_SAMPLES",
     "EvalDataset",
     "EvalSample",
+    "generate_answer",
 ]
