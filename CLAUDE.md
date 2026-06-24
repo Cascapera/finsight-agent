@@ -26,22 +26,23 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [x] `src/finsight/graph/state.py` — AgentState + modelos Pydantic
 - [x] Semana 2: infra base + pgvector + ingestão de PDFs + CI (GitHub Actions)
 - [x] Semana 3: RAG avançado — retriever base ✅, HyDE ✅, re-ranking ✅
-- [~] Semana 4: eval suite de RAG — dataset ✅, generator ✅, métricas ✅, runner ⬜ (métricas próprias, não ragas-lib)
+- [x] Semana 4: eval suite de RAG — dataset ✅, generator ✅, métricas ✅, runner ✅ (métricas próprias, não ragas-lib)
 - [ ] Semana 5: Orchestrator + Research + Financial Agent
 - [ ] Semana 6: RAG Agent + API SSE completa
 - [ ] Semana 7: Observabilidade (LangSmith + Prometheus)
 - [ ] Semana 8: Deploy Fly.io + README final
 
-**Semana atual:** 4 EM ANDAMENTO (Passos 1-3 feitos) — eval suite de RAG
+**Semana atual:** 4 CONCLUÍDA — eval suite de RAG completa. **PRÓXIMA: Semana 5** (Orchestrator + Research + Financial Agent).
 
 **Decisão Semana 4 (2026-06-18):** RAGAS-a-biblioteca NÃO importa na stack
 langchain v1 (`langchain_community 0.4.2` removeu `chat_models.vertexai`, que TODA
 versão do ragas até a 0.4.3 importa incondicionalmente). Guilherme escolheu
 **construir as métricas nós mesmos** (LLM-as-judge, mesmo padrão do reranker) —
 mockáveis, CI sem rede, zero dep frágil. RAGAS fica como referência conceitual.
-TODO de limpeza: remover `ragas` do pyproject no fim da semana.
+LIMPEZA FEITA (Passo 4): `ragas` removido do pyproject (deps + `ignore_missing_imports`).
+Ainda instalado no `.venv` (não atrapalha); some num `pip install -e` em ambiente novo.
 
-**Onde paramos (2026-06-18) — Semana 4:**
+**Onde paramos (2026-06-24) — Semana 4 CONCLUÍDA:**
 - ✅ Passo 1 — `evals/dataset.py`: `EvalSample`/`EvalDataset` (Pydantic strict),
   golden set. Mapa métrica→campo no topo do arquivo. `from_json`/`to_json`,
   `filter_by_ticker`, `SEED_DATASET` (3 casos fictícios "Petro Norte"). Commit `154276b`.
@@ -56,9 +57,13 @@ TODO de limpeza: remover `ragas` do pyproject no fim da semana.
   topo) + answer_relevancy (juiz gera perguntas-reversas → cosseno médio via `embed_texts` +
   flag noncommittal zera evasão). `_get_judge_client` lru_cache temp=0.0 = ponto de mock (client
   cru, cada métrica faz `.with_structured_output(schema)`). Cada métrica → `MetricResult(score,
-  details)`. Guards sem LLM. 20 testes. Commit `<pendente>`.
-- ⬜ **PRÓXIMO: Passo 4 — `evals/runner.py`**: roda baseline/HyDE/rerank sobre o golden set
-  → tabela comparativa das 4 métricas. Fim da semana: remover `ragas` do pyproject.
+  details)`. Guards sem LLM. 20 testes. Commit `ff33393`.
+- ✅ Passo 4 — `evals/runner.py`: COSTURA tudo. Estratégia de retrieval como Protocol injetável
+  (`StrategyFn` + wrappers `_strategy_baseline/_hyde/_rerank`, assinatura única) → runner é
+  orquestração PURA, testável sem banco. `evaluate_sample` (recupera→gera→mede 4 métricas em
+  `asyncio.gather`), `run_evaluation` (estratégia×sample, sequencial p/ poupar rate limit),
+  `aggregate`+`format_report` (puras → tabela markdown comparativa). 5 testes. ragas removido
+  do pyproject. 33 testes unitários verdes. Commit `<pendente>`.
 
 Semana 3 (CONCLUÍDA): retriever base (`61e9fd2`), HyDE (`5df6680`), re-ranking (`84fa275`).
 26 testes verdes (18 da Semana 3 + 8 novos: dataset + generator). Detalhes: memória `project_state.md`.

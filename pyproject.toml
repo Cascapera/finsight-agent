@@ -96,10 +96,12 @@ dev = [
     # mypy strict mode + plugin SQLAlchemy para inferência de tipos em mapped_column
     "mypy>=1.10.0",
     "sqlalchemy[mypy]>=2.0.0",
-
-    # ragas: faithfulness, answer_relevance, context_recall — pipeline de eval no CI
-    "ragas>=0.1.9",
 ]
+# NOTA (Semana 4): ragas-a-biblioteca foi REMOVIDO. Toda versão até a 0.4.3 importa
+# `langchain_community.chat_models.vertexai`, módulo que a langchain v1 deletou — não
+# há ragas compatível com a nossa stack hoje. Construímos as 4 métricas nós mesmos em
+# `finsight/evals/metrics.py` (LLM-as-judge, mockáveis, CI sem rede). RAGAS fica como
+# referência conceitual (mesmos nomes/definições).
 
 [project.scripts]
 # entry point para rodar o servidor: `finsight-serve` no terminal
@@ -154,7 +156,6 @@ plugins = ["sqlalchemy.ext.mypy.plugin"]
 module = [
     "yfinance.*",
     "tavily.*",
-    "ragas.*",
     "pgvector.*",
     "langsmith.*",
     "langchain_text_splitters.*",
