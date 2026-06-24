@@ -26,13 +26,13 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [x] `src/finsight/graph/state.py` — AgentState + modelos Pydantic
 - [x] Semana 2: infra base + pgvector + ingestão de PDFs + CI (GitHub Actions)
 - [x] Semana 3: RAG avançado — retriever base ✅, HyDE ✅, re-ranking ✅
-- [~] Semana 4: eval suite de RAG — dataset ✅, generator ✅, métricas ⬜, runner ⬜ (métricas próprias, não ragas-lib)
+- [~] Semana 4: eval suite de RAG — dataset ✅, generator ✅, métricas ✅, runner ⬜ (métricas próprias, não ragas-lib)
 - [ ] Semana 5: Orchestrator + Research + Financial Agent
 - [ ] Semana 6: RAG Agent + API SSE completa
 - [ ] Semana 7: Observabilidade (LangSmith + Prometheus)
 - [ ] Semana 8: Deploy Fly.io + README final
 
-**Semana atual:** 4 EM ANDAMENTO (Passos 1-2 feitos) — eval suite de RAG
+**Semana atual:** 4 EM ANDAMENTO (Passos 1-3 feitos) — eval suite de RAG
 
 **Decisão Semana 4 (2026-06-18):** RAGAS-a-biblioteca NÃO importa na stack
 langchain v1 (`langchain_community 0.4.2` removeu `chat_models.vertexai`, que TODA
@@ -49,9 +49,16 @@ TODO de limpeza: remover `ragas` do pyproject no fim da semana.
   ancora SÓ no contexto (recusa se faltar info — é o que faithfulness mede). Agnóstico à
   origem dos chunks, temperature=0.0, client mockável. Guard de contexto vazio → recusa
   determinística sem LLM. Commit `0e2a0e7`.
-- ⬜ **PRÓXIMO: Passo 3 — `evals/metrics.py`**: 4 métricas LLM-as-judge (faithfulness,
-  answer_relevancy, context_precision, context_recall). Depois Passo 4 = `runner.py`
-  (roda baseline/HyDE/rerank sobre o golden set → tabela comparativa).
+- ✅ Passo 3 — `evals/metrics.py`: 4 métricas LLM-as-judge. Sacada: 4 métricas = 2 padrões.
+  Padrão A (`_classify_claims`, decompõe texto → claims → suporte): faithfulness (decompõe
+  resposta vs contextos) + context_recall (decompõe ground_truth vs contextos). Padrão B:
+  context_precision (juiz rotula chunks → Average Precision determinística premia relevante no
+  topo) + answer_relevancy (juiz gera perguntas-reversas → cosseno médio via `embed_texts` +
+  flag noncommittal zera evasão). `_get_judge_client` lru_cache temp=0.0 = ponto de mock (client
+  cru, cada métrica faz `.with_structured_output(schema)`). Cada métrica → `MetricResult(score,
+  details)`. Guards sem LLM. 20 testes. Commit `<pendente>`.
+- ⬜ **PRÓXIMO: Passo 4 — `evals/runner.py`**: roda baseline/HyDE/rerank sobre o golden set
+  → tabela comparativa das 4 métricas. Fim da semana: remover `ragas` do pyproject.
 
 Semana 3 (CONCLUÍDA): retriever base (`61e9fd2`), HyDE (`5df6680`), re-ranking (`84fa275`).
 26 testes verdes (18 da Semana 3 + 8 novos: dataset + generator). Detalhes: memória `project_state.md`.
