@@ -159,6 +159,7 @@ plugins = ["sqlalchemy.ext.mypy.plugin"]
 module = [
     "yfinance.*",
     "tavily.*",
+    "pandas.*",
     "pgvector.*",
     "langsmith.*",
     "langchain_text_splitters.*",
