@@ -89,10 +89,12 @@ class Settings(BaseSettings):
     prometheus_enabled: bool = True
     prometheus_metrics_path: str = "/metrics"
 
-    # --- RAGAS ---
-    ragas_min_faithfulness: float = 0.75
-    ragas_min_answer_relevance: float = 0.70
-    ragas_min_context_recall: float = 0.65
+    # --- Eval (thresholds de aprovação das métricas próprias; ver evals/metrics.py) ---
+    # Renomeado de ragas_* na Semana 4: construímos as métricas nós mesmos, RAGAS-lib
+    # saiu da stack. Nomes alinhados às métricas reais (answer_relevancy com 'y').
+    eval_min_faithfulness: float = 0.75
+    eval_min_answer_relevancy: float = 0.70
+    eval_min_context_recall: float = 0.65
 
     @field_validator("cors_origins", mode="before")
     @classmethod
