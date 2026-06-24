@@ -32,7 +32,16 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [ ] Semana 7: Observabilidade (LangSmith + Prometheus)
 - [ ] Semana 8: Deploy Fly.io + README final
 
-**Semana atual:** 4 CONCLUÍDA — eval suite de RAG completa. **PRÓXIMA: Semana 5** (Orchestrator + Research + Financial Agent).
+**Semana atual:** 5 EM ANDAMENTO — Orchestrator + agentes. Passo 1 (Financial Agent) ✅.
+Próximo: Passo 2 (Research Agent), depois Passo 3 (Orchestrator/StateGraph).
+Limpeza Semana 4 feita: settings `ragas_*` → `eval_*` (`e9fbe88`); fix CI mypy/Python 3.12 (`45a3aed`).
+
+**Passo 1 Semana 5 — `agents/financial.py` (commit local, pré-push):** primeiro nó do grafo,
+único DETERMINÍSTICO (sem LLM). 2 camadas: `compute_metrics(prices)→FinancialOutput` (núcleo
+quant puro: Sharpe anualizado, VaR 95% histórico como perda positiva, retorno acum. 1a, vol
+anualizada; testável sem rede) + `financial_node(state)→dict[str,Any]` (contrato de nó LangGraph:
+busca via yfinance em `asyncio.to_thread`, captura erro em `state["errors"]`, nunca propaga).
+`_fetch_prices` = ponto de rede/mock. pandas.* no ignore do mypy. 9 testes. 42 unit verdes.
 
 **Decisão Semana 4 (2026-06-18):** RAGAS-a-biblioteca NÃO importa na stack
 langchain v1 (`langchain_community 0.4.2` removeu `chat_models.vertexai`, que TODA
