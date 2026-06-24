@@ -12,8 +12,11 @@ readme = "README.md"
 license = { file = "LICENSE" }
 authors = [{ name = "Guilherme Cascapera", email = "gcascapera@gmail.com" }]
 
-# >=3.11: usamos match/case, X | Y union types sem Optional, tomllib nativo
-requires-python = ">=3.11"
+# >=3.12: o ambiente real (venv local + CI) é 3.12, e stubs de deps transitivas
+# (ex. numpy 2.5) já usam sintaxe PEP 695 (`type X = ...`), válida só em 3.12+.
+# Manter o alvo em 3.11 fazia o mypy rejeitar esses stubs. Usamos também
+# match/case, X | Y unions, tomllib nativo.
+requires-python = ">=3.12"
 
 dependencies = [
     # --- Orquestração de agentes ---
@@ -145,7 +148,7 @@ known-first-party = ["finsight"]
 # mypy
 # ─────────────────────────────────────────────
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
