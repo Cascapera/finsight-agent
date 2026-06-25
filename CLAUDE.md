@@ -32,9 +32,19 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [ ] Semana 7: Observabilidade (LangSmith + Prometheus)
 - [ ] Semana 8: Deploy Fly.io + README final
 
-**Semana atual:** 5 EM ANDAMENTO — Orchestrator + agentes. Passo 1 (Financial Agent) ✅.
-Próximo: Passo 2 (Research Agent), depois Passo 3 (Orchestrator/StateGraph).
+**Semana atual:** 5 EM ANDAMENTO — Orchestrator + agentes. Passos 1 (Financial) e 2 (Research) ✅.
+Próximo: Passo 3 (Orchestrator/StateGraph: fan-out paralelo→síntese).
 Limpeza Semana 4 feita: settings `ragas_*` → `eval_*` (`e9fbe88`); fix CI mypy/Python 3.12 (`45a3aed`).
+
+**Passo 2 Semana 5 — `agents/research.py` (commit `d5e3077`):** complemento do Financial
+(números vs "o que o mercado diz"). DIFERENÇA do Passo 1: DOIS pontos de rede. 3 camadas:
+`_search_news(ticker,query)→list[NewsItem]` (Tavily SDK síncrona via `asyncio.to_thread`,
+`topic="news"`; ponto de mock #1) + `analyze_sentiment(query,news)→ResearchOutput` (núcleo de
+raciocínio, agnóstico à origem; LLM via `with_structured_output`, `_get_chat_client` temp=0.0 =
+ponto de mock #2) + `research_node(state)→dict` (os 2 IO no mesmo try, captura→`errors`, nunca
+propaga). DECISÃO-CHAVE: schema PRIVADO `_SentimentVerdict` SEM `sources` — o LLM julga, mas as
+URLs reais vêm dos NewsItem (código), não do modelo. Guard sem notícias→output neutro SEM LLM.
+8 testes. 50 unit verdes.
 
 **Passo 1 Semana 5 — `agents/financial.py` (commit local, pré-push):** primeiro nó do grafo,
 único DETERMINÍSTICO (sem LLM). 2 camadas: `compute_metrics(prices)→FinancialOutput` (núcleo
