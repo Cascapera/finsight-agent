@@ -77,14 +77,10 @@ def test_sharpe_matches_manual_formula() -> None:
     out = compute_metrics(prices)
 
     realized = prices.pct_change().dropna()
-    expected_sharpe = (
-        realized.mean() / realized.std(ddof=1) * np.sqrt(TRADING_DAYS)
-    )
+    expected_sharpe = realized.mean() / realized.std(ddof=1) * np.sqrt(TRADING_DAYS)
     assert out.sharpe_ratio is not None
     assert out.sharpe_ratio == pytest.approx(expected_sharpe)
-    assert out.volatility_annualized == pytest.approx(
-        realized.std(ddof=1) * np.sqrt(TRADING_DAYS)
-    )
+    assert out.volatility_annualized == pytest.approx(realized.std(ddof=1) * np.sqrt(TRADING_DAYS))
 
 
 def test_var_95_is_positive_loss_magnitude() -> None:

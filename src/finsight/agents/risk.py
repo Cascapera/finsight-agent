@@ -60,9 +60,7 @@ class _RiskVerdict(BaseModel):
         description="Análise integrada em linguagem natural (3-6 frases), cruzando "
         "métricas quantitativas, sentimento de notícias e trechos de relatórios."
     )
-    key_points: list[str] = Field(
-        description="Pontos principais da análise, em bullets concisos."
-    )
+    key_points: list[str] = Field(description="Pontos principais da análise, em bullets concisos.")
     risk_factors: list[str] = Field(
         description="Fatores de risco concretos identificados a partir dos dados."
     )
