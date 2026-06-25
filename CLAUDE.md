@@ -152,6 +152,7 @@ class AgentState(TypedDict):
 - **Testes:** cada agente tem mock de LLM — CI não faz chamadas reais ao OpenAI
 - **Commits:** mensagens em inglês, padrão Conventional Commits
   - `feat:`, `fix:`, `chore:`, `test:`, `docs:`, `refactor:`
+  - **SEM linha `Co-Authored-By`** em commits e PRs (pedido do Guilherme, 2026-06-25)
 
 ## Permissões pré-aprovadas
 
