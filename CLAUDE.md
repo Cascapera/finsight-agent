@@ -28,13 +28,21 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [x] Semana 3: RAG avançado — retriever base ✅, HyDE ✅, re-ranking ✅
 - [x] Semana 4: eval suite de RAG — dataset ✅, generator ✅, métricas ✅, runner ✅ (métricas próprias, não ragas-lib)
 - [x] Semana 5: Orchestrator + Research + Financial + Risk Agent (StateGraph diamante)
-- [ ] Semana 6: RAG Agent + API SSE completa
+- [x] Semana 6: RAG Agent (leque de 3 ramos) + streaming astream + API FastAPI/SSE
 - [ ] Semana 7: Observabilidade (LangSmith + Prometheus)
 - [ ] Semana 8: Deploy Fly.io + README final
 
-**Semana atual:** 5 CONCLUÍDA — Orchestrator + agentes. Os 3 passos ✅.
-Próximo: Semana 6 (RAG Agent + API SSE). PUSH pendente (main +7, CI não rodou na Semana 5).
+**Semana atual:** 6 CONCLUÍDA — RAG Agent + API SSE. Os 3 passos ✅.
+Próximo: Semana 7 (Observabilidade: LangSmith + Prometheus). PUSH pendente (main +4).
 Limpeza Semana 4 feita: settings `ragas_*` → `eval_*` (`e9fbe88`); fix CI mypy/Python 3.12 (`45a3aed`).
+
+**Semana 6 (commits `cbbf04b`/`c950718`/`2c07670`):** Passo 1 `agents/rag.py` — 3º ramo do leque,
+casca fina sobre `retrieve_and_rerank`+`to_rag_output` (Sem.3), `_USE_HYDE=False`; orchestrator
+virou LEQUE de 3 ramos. Passo 2 `run_analysis_stream` via `astream(stream_mode="updates")`,
+emite `AnalysisEvent`(type/node/data) AGNÓSTICO a HTTP (progress por nó + complete c/ final_answer
++ erros acumulados). Passo 3 `api/` FastAPI: `schemas.AnalyzeRequest` (ticker→upper), `routes`
+(GET /health, POST /analyze→EventSourceResponse traduz AnalysisEvent→evento SSE), `app.create_app`
+(CORS + router; `uvicorn finsight.api.app:app`). 65 unit verdes. /metrics fica p/ Semana 7.
 
 **Passo 3 Semana 5 — `agents/risk.py` + `graph/orchestrator.py` (commit `53a13c5`):** costura os
 nós num grafo DIAMANTE executável. Risk Agent = nó de FAN-IN/síntese (4º modelo `FinalAnswer`):
