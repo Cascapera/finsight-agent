@@ -23,11 +23,13 @@ Este módulo liga os nós num StateGraph executável, num LEQUE (fan-out -> fan-
 """
 
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 from uuid import uuid4
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
+from pydantic import BaseModel
 
 from finsight.agents.financial import financial_node
 from finsight.agents.rag import rag_node
@@ -107,11 +109,80 @@ async def run_analysis(query: str, ticker: str, asset_type: str = "stock") -> Ag
     """
     Conveniência de ponta a ponta: monta o state inicial e executa o grafo.
 
-    É o que a API SSE (Semana 6) vai chamar. `ainvoke` roda o grafo até END e devolve
-    o state final mesclado (com financial/research/final_answer preenchidos). Compila
-    o grafo a cada chamada por simplicidade; a app pode cachear `build_orchestrator()`.
+    `ainvoke` roda o grafo até END e devolve o state final mesclado (financial/
+    research/rag/final_answer preenchidos). BLOQUEANTE: só retorna quando tudo acaba.
+    Para progresso incremental (API SSE), use `run_analysis_stream`. Compila o grafo a
+    cada chamada por simplicidade; a app pode cachear `build_orchestrator()`.
     """
     graph = build_orchestrator()
     initial = build_initial_state(query, ticker, asset_type)
     result = await graph.ainvoke(initial)
     return result  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# Streaming — eventos por nó para a API SSE
+# ---------------------------------------------------------------------------
+
+
+class AnalysisEvent(BaseModel):
+    """
+    Evento de domínio emitido durante a execução do grafo. JSON-serializável.
+
+    DELIBERADAMENTE agnóstico a HTTP/SSE: o orquestrador não conhece a camada de
+    transporte. A API (Passo 3) traduz cada AnalysisEvent num evento SSE. Manter essa
+    fronteira é o que torna o streaming testável sem subir um servidor.
+
+    type="progress": um nó terminou (`node` = qual; `data` = patch serializado).
+    type="complete": fim da execução (`data` = final_answer completo + erros acumulados).
+    """
+
+    type: str
+    node: str | None = None
+    data: dict[str, Any] = {}
+
+
+def _serialize_patch(patch: dict[str, Any]) -> dict[str, Any]:
+    """
+    Converte o patch de um nó em algo JSON-serializável.
+
+    O patch pode trazer modelos Pydantic (FinancialOutput, ResearchOutput, ...) e/ou
+    `errors: list[str]`. Despejamos os modelos com `model_dump()`; o resto passa direto.
+    """
+    out: dict[str, Any] = {}
+    for key, value in patch.items():
+        out[key] = value.model_dump() if isinstance(value, BaseModel) else value
+    return out
+
+
+async def run_analysis_stream(
+    query: str, ticker: str, asset_type: str = "stock"
+) -> AsyncIterator[AnalysisEvent]:
+    """
+    Executa o grafo emitindo um evento por nó concluído + um evento final.
+
+    Usa `astream(stream_mode="updates")`: o LangGraph entrega `{nome_do_nó: patch}` a
+    cada nó que termina (os ramos do fan-out chegam conforme completam). Para cada
+    update emitimos um evento "progress"; ao fim, um "complete" com o final_answer e a
+    lista ACUMULADA de erros — como `updates` traz só patches (não o state cheio),
+    acumulamos final_answer (vem no patch do `risk`) e os erros durante o stream.
+    """
+    graph = build_orchestrator()
+    initial = build_initial_state(query, ticker, asset_type)
+
+    final_answer: dict[str, Any] | None = None
+    errors: list[str] = []
+
+    async for update in graph.astream(initial, stream_mode="updates"):
+        # Um update pode, em tese, conter mais de um nó (mesmo superstep); iteramos.
+        for node_name, patch in update.items():
+            errors.extend(patch.get("errors", []))
+            answer = patch.get("final_answer")
+            if isinstance(answer, BaseModel):
+                final_answer = answer.model_dump()
+            yield AnalysisEvent(type="progress", node=node_name, data=_serialize_patch(patch))
+
+    yield AnalysisEvent(
+        type="complete",
+        data={"final_answer": final_answer, "errors": errors},
+    )

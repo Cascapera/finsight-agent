@@ -20,7 +20,11 @@ import pytest
 from finsight.agents import financial, rag, research, risk
 from finsight.agents.research import NewsItem, _SentimentVerdict
 from finsight.agents.risk import _RiskVerdict
-from finsight.graph.orchestrator import build_initial_state, run_analysis
+from finsight.graph.orchestrator import (
+    build_initial_state,
+    run_analysis,
+    run_analysis_stream,
+)
 from finsight.retrieval.retriever import RetrievedChunk
 
 # ---------------------------------------------------------------------------
@@ -152,3 +156,49 @@ async def test_graph_accumulates_branch_errors(monkeypatch: pytest.MonkeyPatch) 
     assert any("VALE3" in e for e in result["errors"])
     # A síntese rodou apesar da falha parcial.
     assert result["final_answer"] is not None
+
+
+# ===========================================================================
+# Streaming — run_analysis_stream
+# ===========================================================================
+
+
+@pytest.mark.asyncio
+async def test_stream_emits_progress_and_complete(monkeypatch: pytest.MonkeyPatch) -> None:
+    """O stream emite um 'progress' por nó + um 'complete' final com o final_answer."""
+    _wire_happy_path(monkeypatch)
+
+    events = [ev async for ev in run_analysis_stream("vale a pena?", "PETR4", "stock")]
+
+    # Um progress por ramo + risk; e exatamente um complete ao fim.
+    progress_nodes = {ev.node for ev in events if ev.type == "progress"}
+    assert {"financial", "research", "rag", "risk"} <= progress_nodes
+
+    complete = [ev for ev in events if ev.type == "complete"]
+    assert len(complete) == 1
+    assert events[-1].type == "complete"  # complete é o último
+
+    # O progress do risk carrega o final_answer (patch serializado para dict).
+    risk_ev = next(ev for ev in events if ev.node == "risk")
+    assert risk_ev.data["final_answer"]["analysis"] == "síntese integrada"
+
+    # O complete traz o final_answer completo e nenhum erro.
+    assert complete[0].data["final_answer"]["analysis"] == "síntese integrada"
+    assert complete[0].data["errors"] == []
+
+
+@pytest.mark.asyncio
+async def test_stream_complete_accumulates_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Um ramo falha: o evento 'complete' acumula o erro e a síntese ainda sai."""
+    _wire_happy_path(monkeypatch)
+
+    def boom(_t: str, _q: str) -> list[NewsItem]:
+        raise RuntimeError("tavily offline")
+
+    monkeypatch.setattr(research, "_search_news", boom)
+
+    events = [ev async for ev in run_analysis_stream("e aí?", "VALE3", "stock")]
+
+    complete = next(ev for ev in events if ev.type == "complete")
+    assert any("VALE3" in e for e in complete.data["errors"])
+    assert complete.data["final_answer"] is not None
