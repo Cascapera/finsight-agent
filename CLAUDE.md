@@ -27,14 +27,24 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [x] Semana 2: infra base + pgvector + ingestão de PDFs + CI (GitHub Actions)
 - [x] Semana 3: RAG avançado — retriever base ✅, HyDE ✅, re-ranking ✅
 - [x] Semana 4: eval suite de RAG — dataset ✅, generator ✅, métricas ✅, runner ✅ (métricas próprias, não ragas-lib)
-- [ ] Semana 5: Orchestrator + Research + Financial Agent
+- [x] Semana 5: Orchestrator + Research + Financial + Risk Agent (StateGraph diamante)
 - [ ] Semana 6: RAG Agent + API SSE completa
 - [ ] Semana 7: Observabilidade (LangSmith + Prometheus)
 - [ ] Semana 8: Deploy Fly.io + README final
 
-**Semana atual:** 5 EM ANDAMENTO — Orchestrator + agentes. Passos 1 (Financial) e 2 (Research) ✅.
-Próximo: Passo 3 (Orchestrator/StateGraph: fan-out paralelo→síntese).
+**Semana atual:** 5 CONCLUÍDA — Orchestrator + agentes. Os 3 passos ✅.
+Próximo: Semana 6 (RAG Agent + API SSE). PUSH pendente (main +7, CI não rodou na Semana 5).
 Limpeza Semana 4 feita: settings `ragas_*` → `eval_*` (`e9fbe88`); fix CI mypy/Python 3.12 (`45a3aed`).
+
+**Passo 3 Semana 5 — `agents/risk.py` + `graph/orchestrator.py` (commit `53a13c5`):** costura os
+nós num grafo DIAMANTE executável. Risk Agent = nó de FAN-IN/síntese (4º modelo `FinalAnswer`):
+`synthesize(state)→FinalAnswer` (lê financial/research/rag defensivamente, LLM structured output)
++ `risk_node` (captura erro→errors, fallback). DECISÃO: schema PRIVADO `_RiskVerdict` SEM
+`disclaimer` — disclaimer é default FIXO do FinalAnswer (código), não do LLM. Orchestrator:
+`StateGraph(AgentState)`, `add_edge(START,fin/research)`=FAN-OUT paralelo, `add_edge(fin/research,
+risk)`=FAN-IN; reducer `add` acumula erros dos ramos. `build_orchestrator()` (compile sem
+checkpointer), `build_initial_state()`, `run_analysis()` (o que a API SSE da Sem.6 chama).
+Forward-compat RAG = +1 add_node +2 add_edge. 7 testes (inclui diamante e2e SEM rede). 57 unit.
 
 **Passo 2 Semana 5 — `agents/research.py` (commit `d5e3077`):** complemento do Financial
 (números vs "o que o mercado diz"). DIFERENÇA do Passo 1: DOIS pontos de rede. 3 camadas:
