@@ -1,6 +1,7 @@
 """Agentes especializados do grafo (nós do LangGraph)."""
 
 from finsight.agents.financial import compute_metrics, financial_node
+from finsight.agents.rag import rag_node
 from finsight.agents.research import analyze_sentiment, research_node
 from finsight.agents.risk import risk_node, synthesize
 
@@ -8,6 +9,7 @@ __all__ = [
     "analyze_sentiment",
     "compute_metrics",
     "financial_node",
+    "rag_node",
     "research_node",
     "risk_node",
     "synthesize",

@@ -11,15 +11,17 @@ de rede de CADA nó (resolvidos em tempo de chamada, então o monkeypatch pega):
 `build_initial_state` é testado puro (sem grafo).
 """
 
+import uuid
 from typing import Any
 
 import pandas as pd
 import pytest
 
-from finsight.agents import financial, research, risk
+from finsight.agents import financial, rag, research, risk
 from finsight.agents.research import NewsItem, _SentimentVerdict
 from finsight.agents.risk import _RiskVerdict
 from finsight.graph.orchestrator import build_initial_state, run_analysis
+from finsight.retrieval.retriever import RetrievedChunk
 
 # ---------------------------------------------------------------------------
 # Fakes de LLM compartilhados (cada client devolve o veredito do seu schema)
@@ -43,7 +45,7 @@ class _FakeChatClient:
 
 
 def _wire_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Mocka os 4 pontos de rede para um caminho feliz, determinístico e sem rede."""
+    """Mocka os pontos de rede dos 3 ramos + síntese: caminho feliz, sem rede."""
     # Financial: série de preços com variação real -> métricas calculáveis.
     prices = pd.Series([100.0 * (1.0 + 0.001 * (i % 5 - 2)) ** i for i in range(60)])
     monkeypatch.setattr(financial, "_fetch_prices", lambda _ticker: prices)
@@ -58,6 +60,20 @@ def _wire_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
         summary="bom momento", sentiment="bullish", key_events=["lucro"], confidence=0.8
     )
     monkeypatch.setattr(research, "_get_chat_client", lambda: _FakeChatClient(research_verdict))
+
+    # RAG: chunks recuperados fabricados (mocka a camada de retrieval inteira).
+    async def fake_retrieve(query: str, *, ticker: str, use_hyde: bool) -> list[RetrievedChunk]:
+        return [
+            RetrievedChunk(
+                content="trecho relevante",
+                score=0.9,
+                document_id=uuid.uuid4(),
+                document_title="Relatorio Anual",
+                chunk_index=0,
+            )
+        ]
+
+    monkeypatch.setattr(rag, "retrieve_and_rerank", fake_retrieve)
 
     # Risk: veredito de síntese fixo.
     risk_verdict = _RiskVerdict(
@@ -92,17 +108,19 @@ def test_build_initial_state_shape() -> None:
 
 
 @pytest.mark.asyncio
-async def test_graph_runs_diamond_to_final_answer(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Caminho feliz: os dois ramos rodam e a síntese converge num final_answer."""
+async def test_graph_runs_fanout_to_final_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Caminho feliz: os três ramos rodam e a síntese converge num final_answer."""
     _wire_happy_path(monkeypatch)
 
     result = await run_analysis("vale a pena?", "PETR4", "stock")
 
-    # Fan-out preencheu os dois ramos...
+    # Fan-out preencheu os três ramos...
     assert result["financial"] is not None
     assert result["financial"].current_price is not None
     assert result["research"] is not None
     assert result["research"].sentiment == "bullish"
+    assert result["rag"] is not None
+    assert result["rag"].chunks == ["trecho relevante"]
     # ...e o fan-in sintetizou.
     assert result["final_answer"] is not None
     assert result["final_answer"].analysis == "síntese integrada"

@@ -1,31 +1,25 @@
 """
 Orchestrator — monta e compila o grafo LangGraph que costura os agentes.
 
-Até aqui tínhamos nós soltos (financial/research/risk). Este módulo os liga num
-StateGraph executável, no formato DIAMANTE (fan-out -> fan-in):
+Este módulo liga os nós num StateGraph executável, num LEQUE (fan-out -> fan-in):
 
-                 START
-                /      \
-       financial        research        (rodam em PARALELO, mesmo superstep)
-                \\      /
-                  risk                   (FAN-IN: só roda após os DOIS terminarem)
-                   |
-                  END
+                      START
+                   /    |    \
+          financial  research  rag      (rodam em PARALELO, mesmo superstep)
+                   \\    |    /
+                       risk             (FAN-IN: só roda após os TRÊS terminarem)
+                        |
+                       END
 
 >>> Por que diamante e como o LangGraph o executa <<<
-- Duas arestas saindo de START = FAN-OUT: os dois nós disparam concorrentemente.
+- Arestas saindo de START = FAN-OUT: os três nós disparam concorrentemente.
   (Por isso financial/research usam asyncio.to_thread nos seus IO bloqueantes.)
-- Duas arestas chegando em `risk` = FAN-IN: o LangGraph espera AMBOS os ramos
+- Arestas chegando em `risk` = FAN-IN: o LangGraph espera TODOS os ramos
   completarem antes de rodar `risk` uma única vez, já com o state mesclado. Modelo
   de superstep — não precisamos de espera manual.
 - Erros dos ramos paralelos se ACUMULAM: `AgentState.errors` tem reducer `add`, que
   concatena as escritas concorrentes em vez de uma sobrescrever a outra. Quando
-  `risk` roda, `state["errors"]` já tem os erros dos dois ramos.
-
->>> Forward-compat (Semana 6) <<<
-O RAG Agent entra como um terceiro ramo do diamante: bastará `add_node("rag", ...)`
-+ `add_edge(START, "rag")` + `add_edge("rag", "risk")`. `synthesize` já lê `rag` do
-state de forma defensiva, então nada mais muda.
+  `risk` roda, `state["errors"]` já tem os erros dos três ramos.
 """
 
 import logging
@@ -36,6 +30,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from finsight.agents.financial import financial_node
+from finsight.agents.rag import rag_node
 from finsight.agents.research import research_node
 from finsight.agents.risk import risk_node
 from finsight.graph.state import AgentState
@@ -46,6 +41,7 @@ logger = logging.getLogger(__name__)
 # testes. Os ramos paralelos do fan-out e o nó de síntese (fan-in).
 _NODE_FINANCIAL = "financial"
 _NODE_RESEARCH = "research"
+_NODE_RAG = "rag"
 _NODE_RISK = "risk"
 
 
@@ -64,21 +60,24 @@ def build_orchestrator() -> CompiledStateGraph[AgentState, Any, Any, Any]:
     # chamada — é o que permite os testes mockarem sem rede.
     builder.add_node(_NODE_FINANCIAL, financial_node)
     builder.add_node(_NODE_RESEARCH, research_node)
+    builder.add_node(_NODE_RAG, rag_node)
     builder.add_node(_NODE_RISK, risk_node)
 
-    # FAN-OUT: START -> financial e START -> research (disparam em paralelo).
+    # FAN-OUT: START -> cada ramo (disparam em paralelo, mesmo superstep).
     builder.add_edge(START, _NODE_FINANCIAL)
     builder.add_edge(START, _NODE_RESEARCH)
+    builder.add_edge(START, _NODE_RAG)
 
-    # FAN-IN: ambos -> risk. risk só roda quando os dois ramos terminam.
+    # FAN-IN: todos -> risk. risk só roda quando os três ramos terminam.
     builder.add_edge(_NODE_FINANCIAL, _NODE_RISK)
     builder.add_edge(_NODE_RESEARCH, _NODE_RISK)
+    builder.add_edge(_NODE_RAG, _NODE_RISK)
 
     # risk -> END: fim da execução.
     builder.add_edge(_NODE_RISK, END)
 
     compiled = builder.compile()
-    logger.debug("orchestrator: grafo compilado (financial+research -> risk)")
+    logger.debug("orchestrator: grafo compilado (financial+research+rag -> risk)")
     return compiled
 
 
