@@ -10,10 +10,12 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sse_starlette.sse import EventSourceResponse
 
 from finsight.api.schemas import AnalyzeRequest
+from finsight.db.session import settings
 from finsight.graph.orchestrator import run_analysis_stream
 
 logger = logging.getLogger(__name__)
@@ -25,6 +27,21 @@ router = APIRouter()
 async def health() -> dict[str, str]:
     """Liveness probe — usado pelo Fly.io (Semana 8) e por monitoração simples."""
     return {"status": "ok"}
+
+
+@router.get("/metrics")
+async def metrics() -> Response:
+    """
+    Exposição das métricas Prometheus (scrape em docker/prometheus.yml).
+
+    `generate_latest()` serializa o registry global no formato de texto do Prometheus;
+    o content-type DEVE ser o `CONTENT_TYPE_LATEST` (text/plain; version=0.0.4) para o
+    scraper parsear. Respeita `settings.prometheus_enabled`: desligado -> 404 (a rota
+    existe, mas o operador optou por não expor métricas).
+    """
+    if not settings.prometheus_enabled:
+        raise HTTPException(status_code=404, detail="metrics disabled")
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 async def _sse_events(request: AnalyzeRequest) -> AsyncIterator[dict[str, Any]]:

@@ -36,6 +36,7 @@ from finsight.agents.rag import rag_node
 from finsight.agents.research import research_node
 from finsight.agents.risk import risk_node
 from finsight.graph.state import AgentState
+from finsight.observability.metrics import NodeFn, instrument_node
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,23 @@ _NODE_FINANCIAL = "financial"
 _NODE_RESEARCH = "research"
 _NODE_RAG = "rag"
 _NODE_RISK = "risk"
+
+
+def _add_node(
+    builder: "StateGraph[AgentState, Any, Any, Any]",
+    name: str,
+    fn: NodeFn,
+) -> None:
+    """
+    Registra um nó já instrumentado com métricas.
+
+    O `type: ignore[call-overload]` é fricção dos stubs do langgraph: os overloads de
+    `add_node` casam com uma `async def` concreta, mas não com um `Callable` devolvido
+    por outra função (instrument_node) via alias. Em runtime é a mesma corrotina;
+    centralizar aqui isola o ignore num único ponto (mesmo espírito do ignore de
+    `ainvoke` em run_analysis).
+    """
+    builder.add_node(name, instrument_node(name, fn))  # type: ignore[call-overload]
 
 
 def build_orchestrator() -> CompiledStateGraph[AgentState, Any, Any, Any]:
@@ -57,13 +75,15 @@ def build_orchestrator() -> CompiledStateGraph[AgentState, Any, Any, Any]:
     """
     builder: StateGraph[AgentState, Any, Any, Any] = StateGraph(AgentState)
 
-    # Registra os nós. add_node guarda a REFERÊNCIA da função; o nó resolve seus
-    # pontos de rede (_fetch_prices, _search_news, _get_chat_client) em tempo de
-    # chamada — é o que permite os testes mockarem sem rede.
-    builder.add_node(_NODE_FINANCIAL, financial_node)
-    builder.add_node(_NODE_RESEARCH, research_node)
-    builder.add_node(_NODE_RAG, rag_node)
-    builder.add_node(_NODE_RISK, risk_node)
+    # Registra os nós, cada um embrulhado por instrument_node (métricas Prometheus:
+    # latência/runs/erros por nó). O nó resolve seus pontos de rede (_fetch_prices,
+    # _search_news, _get_chat_client) em tempo de chamada — é o que permite os testes
+    # mockarem sem rede. O wrapper é transparente ao mock: só envolve, a função
+    # original segue resolvendo tudo. _add_node centraliza o cast (ver helper abaixo).
+    _add_node(builder, _NODE_FINANCIAL, financial_node)
+    _add_node(builder, _NODE_RESEARCH, research_node)
+    _add_node(builder, _NODE_RAG, rag_node)
+    _add_node(builder, _NODE_RISK, risk_node)
 
     # FAN-OUT: START -> cada ramo (disparam em paralelo, mesmo superstep).
     builder.add_edge(START, _NODE_FINANCIAL)

@@ -85,6 +85,25 @@ def test_analyze_rejects_empty_query() -> None:
     assert resp.status_code == 422
 
 
+def test_metrics_endpoint_exposes_prometheus() -> None:
+    """GET /metrics responde no formato Prometheus com os nomes das nossas métricas."""
+    with TestClient(create_app()) as client:
+        resp = client.get("/metrics")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/plain")
+    assert "finsight_node_duration_seconds" in resp.text
+
+
+def test_metrics_endpoint_404_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Com prometheus_enabled=False, /metrics responde 404 (operador optou por não expor)."""
+    from finsight.api import routes
+
+    monkeypatch.setattr(routes.settings, "prometheus_enabled", False)
+    with TestClient(create_app()) as client:
+        resp = client.get("/metrics")
+    assert resp.status_code == 404
+
+
 def test_analyze_streams_sse(monkeypatch: pytest.MonkeyPatch) -> None:
     """POST /analyze faz streaming dos eventos SSE até o complete com final_answer."""
     _wire_happy_path(monkeypatch)
