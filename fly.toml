@@ -1,0 +1,68 @@
+# ─────────────────────────────────────────────
+# fly.toml — configuração de deploy do FinSight Agent no Fly.io (Semana 8)
+#
+# Modelo mental: este arquivo descreve INFRA e CONFIG NÃO-SENSÍVEL. Tudo que é
+# segredo (API keys, DATABASE_URL do Supabase, REDIS_URL da Upstash) NÃO entra aqui
+# — vai por `fly secrets set` (ver README). Secrets são injetados como env vars no
+# runtime e no release_command, mas nunca ficam versionados no git.
+#
+# Primeiro deploy:
+#   fly launch --no-deploy        # cria o app, não publica ainda
+#   fly secrets set OPENAI_API_KEY=... TAVILY_API_KEY=... DATABASE_URL=... REDIS_URL=...
+#   fly deploy
+# ─────────────────────────────────────────────
+
+app = "finsight-agent"
+# gru = São Paulo. Mesma região do Supabase sa-east-1 reduz latência app↔banco
+# (cada nó RAG faz várias queries a pgvector; RTT alto somaria em cada request).
+primary_region = "gru"
+
+[build]
+  # Usa o Dockerfile multi-stage do projeto (corrigido no Passo 1: base 3.12,
+  # entrypoint finsight.api.main:app, só deps de runtime).
+  dockerfile = "Dockerfile"
+
+[deploy]
+  # release_command roda numa máquina EFÊMERA, com os secrets injetados, ANTES de
+  # rotear tráfego para a nova versão. É o ponto canônico para migrations: se o
+  # `alembic upgrade head` falhar, o Fly ABORTA o deploy — nunca publica uma versão
+  # de app contra um schema desatualizado. (A imagem carrega alembic.ini + psycopg2.)
+  release_command = "alembic upgrade head"
+
+[env]
+  # Config NÃO-sensível. ENVIRONMENT=production faz settings.is_production=True:
+  # usa OPENAI_MODEL_PROD (gpt-4o) e silencia o echo de SQL do SQLAlchemy.
+  ENVIRONMENT = "production"
+  API_PORT = "8000"
+  PROMETHEUS_ENABLED = "true"
+  # Liga o tracing; a API key (LANGCHAIN_API_KEY) entra como secret.
+  LANGCHAIN_TRACING_V2 = "true"
+  LANGCHAIN_PROJECT = "finsight-agent-prod"
+
+[http_service]
+  # internal_port DEVE bater com a porta que o uvicorn escuta (CMD do Dockerfile: 8000).
+  internal_port = 8000
+  # Redireciona todo HTTP→HTTPS na borda do Fly (TLS terminado lá).
+  force_https = true
+  # Scale-to-zero: sem tráfego, a máquina hiberna (não há cobrança de CPU). O próximo
+  # request religa em ~poucos segundos. Ideal para um projeto de portfólio/estudo.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  # Health check ativo: o Fly só roteia tráfego para a máquina quando GET /health
+  # responde 200. grace_period dá tempo do uvicorn importar a stack (langchain/pandas
+  # pesam alguns segundos no cold start) antes de começar a checar.
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "15s"
+    timeout = "2s"
+    grace_period = "10s"
+
+[[vm]]
+  # shared-cpu-1x basta (IO-bound: espera LLM/banco, não queima CPU). 1GB de RAM
+  # porque o import de langchain + pandas + numpy estoura os 512MB do menor tier (OOM
+  # no startup, antes mesmo do primeiro request).
+  size = "shared-cpu-1x"
+  memory = "1gb"

@@ -7,7 +7,7 @@ Configuração do banco de dados: Settings, engine async e session factory.
 from collections.abc import AsyncGenerator
 from typing import Annotated, Any
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -17,6 +17,38 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
+
+# ---------------------------------------------------------------------------
+# Normalização de URL de provedores gerenciados (Supabase/Upstash) — Semana 8
+# ---------------------------------------------------------------------------
+# Provedores entregam UMA URL `postgresql://...` sem o sufixo de driver e exigem TLS.
+# O SQLAlchemy roteia o driver pelo scheme, então precisamos injetar `+asyncpg`/
+# `+psycopg2`; e cada driver fala um dialeto de SSL diferente na query string:
+#   - asyncpg  → token `ssl=require`   (o dialeto asyncpg do SQLAlchemy o repassa a
+#                asyncpg.connect(ssl=...); 'require' = cifra sem verificar CA)
+#   - psycopg2 → token `sslmode=require` (libpq)
+# Funções puras (sem rede) → testáveis isoladamente.
+
+
+def _inject_driver_and_ssl(raw_url: str, *, driver: str, ssl_token: str) -> str:
+    """
+    Reescreve uma URL `postgres(ql)://...` de provedor para `postgresql+<driver>://`
+    e garante TLS via `<ssl_token>=require` se a URL ainda não traz config de SSL.
+    """
+    url = raw_url
+    # Normaliza o scheme: cobre tanto `postgresql://` quanto o `postgres://` (Heroku-
+    # style). count=1 garante que só o scheme é trocado, nunca algo no user/senha.
+    for scheme in ("postgresql://", "postgres://"):
+        if url.startswith(scheme):
+            url = f"postgresql+{driver}://" + url[len(scheme) :]
+            break
+    # Só adiciona SSL se a URL não declarou nada — respeita uma config explícita do
+    # operador (ex.: sslmode=verify-full com CA própria).
+    if "ssl=" not in url and "sslmode=" not in url:
+        sep = "&" if "?" in url else "?"
+        url = f"{url}{sep}{ssl_token}=require"
+    return url
+
 
 # ---------------------------------------------------------------------------
 # Settings — lê .env e valida tipos na inicialização
@@ -56,6 +88,15 @@ class Settings(BaseSettings):
     langchain_tracing_v2: bool = False
     langchain_api_key: str = ""
     langchain_project: str = "finsight-agent-dev"
+
+    # --- Overrides de URL para provedores gerenciados (Supabase/Upstash) — Semana 8 ---
+    # Quando setados (via `fly secrets set` no deploy), VENCEM as partes POSTGRES_*/
+    # redis_* abaixo. Provedores gerenciados dão UMA URL única e exigem TLS — montar por
+    # partes não cobriria SSL. Vazio (default) = dev local usa as partes do compose.
+    # validation_alias: o env var é `DATABASE_URL`/`REDIS_URL` cru (o que o provedor
+    # mostra), não `DATABASE_URL_OVERRIDE` — o nome do campo é só interno.
+    database_url_override: str = Field(default="", validation_alias="DATABASE_URL")
+    redis_url_override: str = Field(default="", validation_alias="REDIS_URL")
 
     # --- PostgreSQL ---
     postgres_user: str = "finsight"
@@ -121,7 +162,14 @@ class Settings(BaseSettings):
         asyncpg usa o scheme `postgresql+asyncpg://` — diferente do psycopg2
         que usa `postgresql://`. O SQLAlchemy roteia para o driver correto
         baseado no scheme.
+
+        Se DATABASE_URL veio como secret (Supabase em prod), ele vence: normalizamos
+        scheme + TLS. Senão, montamos a partir das partes POSTGRES_* (dev local).
         """
+        if self.database_url_override:
+            return _inject_driver_and_ssl(
+                self.database_url_override, driver="asyncpg", ssl_token="ssl"
+            )
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -135,7 +183,14 @@ class Settings(BaseSettings):
         Alembic roda migrations de forma síncrona — precisa de psycopg2 ou
         do driver síncrono. Usamos `postgresql+psycopg2` aqui.
         Nota: requer `psycopg2-binary` instalado (adicionamos nas deps do Alembic).
+
+        Mesmo override do async: em prod o Alembic (release_command no Fly) usa a
+        DATABASE_URL do Supabase, com `sslmode=require` que o libpq/psycopg2 entende.
         """
+        if self.database_url_override:
+            return _inject_driver_and_ssl(
+                self.database_url_override, driver="psycopg2", ssl_token="sslmode"
+            )
         return (
             f"postgresql+psycopg2://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
@@ -143,6 +198,10 @@ class Settings(BaseSettings):
 
     @property
     def redis_url(self) -> str:
+        # REDIS_URL como secret (Upstash em prod) vence: já vem como `rediss://` com TLS
+        # e credenciais embutidas — o redis-py entende direto, sem normalização.
+        if self.redis_url_override:
+            return self.redis_url_override
         if self.redis_password:
             return f"redis://:{self.redis_password}@{self.redis_host}:{self.redis_port}/{self.redis_db}"
         return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
