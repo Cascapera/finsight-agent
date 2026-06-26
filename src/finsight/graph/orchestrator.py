@@ -27,6 +27,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 from uuid import uuid4
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel
@@ -125,6 +126,26 @@ def build_initial_state(query: str, ticker: str, asset_type: str = "stock") -> A
     )
 
 
+def _run_config(state: AgentState) -> RunnableConfig:
+    """
+    Monta o RunnableConfig da execução, para correlação no LangSmith.
+
+    O LangGraph propaga este config a TODAS as chamadas internas (cada ChatOpenAI dos
+    nós), então o `metadata.execution_id` aparece em cada trace — amarrando os spans de
+    uma mesma análise. `run_name` dá um título legível ao trace raiz; `tags` permitem
+    filtrar no LangSmith por tipo de ativo. Inerte se o tracing estiver desligado.
+    """
+    return {
+        "run_name": f"finsight-analysis:{state['ticker']}",
+        "metadata": {
+            "execution_id": state["execution_id"],
+            "ticker": state["ticker"],
+            "asset_type": state["asset_type"],
+        },
+        "tags": ["finsight", state["asset_type"]],
+    }
+
+
 async def run_analysis(query: str, ticker: str, asset_type: str = "stock") -> AgentState:
     """
     Conveniência de ponta a ponta: monta o state inicial e executa o grafo.
@@ -136,7 +157,7 @@ async def run_analysis(query: str, ticker: str, asset_type: str = "stock") -> Ag
     """
     graph = build_orchestrator()
     initial = build_initial_state(query, ticker, asset_type)
-    result = await graph.ainvoke(initial)
+    result = await graph.ainvoke(initial, config=_run_config(initial))
     return result  # type: ignore[return-value]
 
 
@@ -193,7 +214,7 @@ async def run_analysis_stream(
     final_answer: dict[str, Any] | None = None
     errors: list[str] = []
 
-    async for update in graph.astream(initial, stream_mode="updates"):
+    async for update in graph.astream(initial, stream_mode="updates", config=_run_config(initial)):
         # Um update pode, em tese, conter mais de um nó (mesmo superstep); iteramos.
         for node_name, patch in update.items():
             errors.extend(patch.get("errors", []))

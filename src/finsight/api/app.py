@@ -14,12 +14,17 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from finsight.api.routes import router
 from finsight.db.session import settings
+from finsight.observability.tracing import configure_tracing
 
 logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
-    """Monta a aplicação: metadados, CORS e rotas. Sem efeito de rede ao criar."""
+    """Monta a aplicação: tracing, metadados, CORS e rotas. Sem efeito de rede ao criar."""
+    # Liga o tracing LangSmith (no-op se desabilitado em settings). Feito na borda: a
+    # partir daqui toda chamada de LLM dos nós é tracejada automaticamente.
+    configure_tracing()
+
     app = FastAPI(
         title="FinSight Agent",
         description="Análise multi-agente de ativos financeiros (LangGraph + RAG).",
