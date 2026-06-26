@@ -70,9 +70,7 @@ def test_database_url_uses_override_when_present() -> None:
 
 def test_database_url_falls_back_to_parts_without_override() -> None:
     s = _settings()  # sem override → monta das partes (dev local), sem SSL
-    assert s.database_url == (
-        "postgresql+asyncpg://finsight:finsight@localhost:5432/finsight"
-    )
+    assert s.database_url == ("postgresql+asyncpg://finsight:finsight@localhost:5432/finsight")
     assert "ssl" not in s.database_url
 
 
