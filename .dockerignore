@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────
+# .dockerignore — o que NÃO entra no contexto de build
+# Tudo aqui é excluído antes de o Docker daemon receber o contexto: build mais
+# rápido (menos bytes transferidos) e imagem sem arquivos irrelevantes/sensíveis.
+# REGRA: o que o Dockerfile precisa em build time NÃO pode ser ignorado aqui —
+# por isso pyproject.toml, src/, README.md e LICENSE ficam de FORA desta lista
+# (o `pip wheel` do hatchling lê README.md e LICENSE para os metadados do wheel).
+# ─────────────────────────────────────────────
+
+# Ambiente virtual local — a imagem instala suas próprias deps a partir dos wheels
+.venv/
+venv/
+
+# Git e CI — irrelevantes em runtime
+.git/
+.gitignore
+.github/
+
+# Segredos: o .env NUNCA vai para a imagem. Em produção os valores entram via
+# `fly secrets set` (Semana 8); empacotá-los na imagem vazaria credenciais.
+.env
+.env.*
+!.env.example
+
+# Testes e dados de fixtures — não rodam em produção
+tests/
+data/
+
+# Documentação e infra de dev que não pertence à imagem da API
+docs/
+docker/
+docker-compose.yml
+fly.toml
+
+# Caches de ferramentas (Python, mypy, ruff, pytest)
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Artefatos de build
+*.egg-info/
+dist/
+build/

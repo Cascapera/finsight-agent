@@ -7,7 +7,9 @@
 # Responsabilidade única: compilar dependências em .whl files
 # Este stage não vai para a imagem final — só os artefatos gerados
 # ─────────────────────────────────────────────
-FROM python:3.11-slim AS builder
+# python:3.12-slim: o projeto exige >=3.12 (pyproject: requires-python). A base 3.11
+# fazia o `pip wheel` recusar com "requires a different Python" — build nunca passava.
+FROM python:3.12-slim AS builder
 
 # Instala dependências de sistema necessárias para compilar extensões C:
 # - gcc, python3-dev: para asyncpg (driver PostgreSQL em Cython)
@@ -24,23 +26,29 @@ WORKDIR /build
 # Copia apenas os arquivos de definição de deps antes do código-fonte.
 # Aproveitamento de cache do Docker: se pyproject.toml não mudou,
 # o `pip wheel` não roda novamente — layer fica em cache.
-COPY pyproject.toml ./
+# README.md e LICENSE entram junto: o hatchling lê `readme`/`license` do pyproject
+# (pyproject.toml: readme = "README.md", license = { file = "LICENSE" }) ao montar os
+# metadados do wheel — sem esses arquivos no contexto, o `pip wheel` falha.
+COPY pyproject.toml README.md LICENSE ./
 # Cria src/finsight/__init__.py vazio para o hatchling encontrar o pacote
 # sem precisar copiar todo o código-fonte neste stage
 RUN mkdir -p src/finsight && touch src/finsight/__init__.py
 
-# --no-deps: não resolve sub-deps aqui — deixa para o pip resolver tudo de uma vez
 # wheel: gera .whl pré-compilados em /wheels para instalação rápida no stage runtime
+# `.` (sem [dev]): só dependências de RUNTIME entram na imagem — pytest, ruff e mypy
+# ficam de fora (imagem menor, menos superfície de ataque). Dev roda no venv local.
 # --no-cache-dir: não salva cache de download no layer (reduziria tamanho da imagem)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip wheel --no-cache-dir --wheel-dir /wheels ".[dev]"
+    pip wheel --no-cache-dir --wheel-dir /wheels "."
 
 
 # ─────────────────────────────────────────────
 # Stage 2: runtime
 # Imagem final limpa — sem compiladores, sem headers, sem ferramentas de build
 # ─────────────────────────────────────────────
-FROM python:3.11-slim AS runtime
+# Runtime na MESMA versão do builder (3.12): os wheels com extensões C (asyncpg,
+# psycopg2) são compilados para o ABI da 3.12 — rodar em 3.11 daria ImportError.
+FROM python:3.12-slim AS runtime
 
 # libpq5: biblioteca de runtime do PostgreSQL (versão menor que libpq-dev)
 # asyncpg linka dinamicamente contra libpq5 em runtime — sem ela, ImportError
@@ -67,6 +75,12 @@ RUN pip install --no-cache-dir --no-index --find-links /wheels /wheels/*.whl && 
 # Copia o código-fonte após instalar deps — aproveita cache do Docker:
 # mudanças no código não invalidam o layer de dependências
 COPY src/ ./src/
+
+# alembic.ini precisa estar na imagem: o `release_command` do Fly (Semana 8) roda
+# `alembic upgrade head` a cada deploy, e o Alembic procura este arquivo no WORKDIR.
+# Sem ele: "No config file 'alembic.ini' found". O env.py (em src/) lê a URL do banco
+# de settings.database_url_sync — que em prod resolve para a DATABASE_URL do Supabase.
+COPY alembic.ini ./
 
 # Define o usuário não-root antes de qualquer CMD/ENTRYPOINT
 USER finsight
