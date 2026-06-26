@@ -30,11 +30,27 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [x] Semana 5: Orchestrator + Research + Financial + Risk Agent (StateGraph diamante)
 - [x] Semana 6: RAG Agent (leque de 3 ramos) + streaming astream + API FastAPI/SSE
 - [x] Semana 7: Observabilidade — Prometheus (/metrics + instrument_node) + LangSmith tracing
-- [ ] Semana 8: Deploy Fly.io + README final
+- [x] Semana 8: Deploy Fly.io (fly.toml + Supabase/Upstash) + README final
 
-**Semana atual:** 7 CONCLUÍDA — Observabilidade (Prometheus + LangSmith). Os 2 passos ✅.
-Próximo: Semana 8 (Deploy Fly.io + README final). PUSH pendente (main +2).
+**Semana atual:** 8 CONCLUÍDA — Deploy + README. Os 3 passos ✅. PROJETO COMPLETO (16 sem.).
+PUSH pendente (main +4, só Sem.8; Sem.7 já pushada). Deploy real ao Fly ainda não executado
+(precisa contas Supabase/Upstash + `fly secrets set`); o caminho está pronto e validado.
 Limpeza Semana 4 feita: settings `ragas_*` → `eval_*` (`e9fbe88`); fix CI mypy/Python 3.12 (`45a3aed`).
+
+**Semana 8 (commits `853c7d2`/`03ac6c5`/`af7d077`):** Passo 1 fix do container —
+`api/main.py` NOVO (re-exporta `app`+`run()`; Dockerfile ENTRYPOINT e console script
+`finsight-serve` apontavam p/ `finsight.api.main` inexistente → container morria no boot),
+base `python:3.11`→`3.12-slim` (pyproject exige >=3.12), `.[dev]`→`.` (só runtime),
+`.dockerignore` NOVO. Passo 2 deploy/config — `Settings` ganhou overrides `DATABASE_URL`/
+`REDIS_URL` (via `validation_alias`) que VENCEM as partes `POSTGRES_*`/`REDIS_*`; helper
+puro `_inject_driver_and_ssl` injeta driver (`+asyncpg`/`+psycopg2`) + TLS (`ssl`/`sslmode
+=require`, exigência Supabase/Upstash); Redis usa `rediss://` verbatim; `fly.toml` NOVO
+(região gru, `release_command=alembic upgrade head`, health `/health`, scale-to-zero, 1gb);
+`COPY alembic.ini` no Dockerfile (release_command acha config). Passo 3 README final.
+DECISÃO infra: Supabase (pgvector pronto) + Upstash (Redis TLS) — Fly Postgres nativo NÃO
+tem pgvector. 82 unit verdes (+9 `test_settings.py`). 3 bugs latentes de imagem corrigidos
+(imagem nunca tinha sido buildada). Validação real: docker build OK + container `/health`→200
++ `alembic heads` dentro do container.
 
 **Semana 7 (commits `8be6843`/`a596f8d`):** Passo 1 Prometheus — `observability/metrics.py`
 (3 métricas com label `node`: duration Histogram + runs/errors Counters; `instrument_node`
