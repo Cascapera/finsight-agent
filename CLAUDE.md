@@ -29,12 +29,19 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [x] Semana 4: eval suite de RAG — dataset ✅, generator ✅, métricas ✅, runner ✅ (métricas próprias, não ragas-lib)
 - [x] Semana 5: Orchestrator + Research + Financial + Risk Agent (StateGraph diamante)
 - [x] Semana 6: RAG Agent (leque de 3 ramos) + streaming astream + API FastAPI/SSE
-- [ ] Semana 7: Observabilidade (LangSmith + Prometheus)
+- [x] Semana 7: Observabilidade — Prometheus (/metrics + instrument_node) + LangSmith tracing
 - [ ] Semana 8: Deploy Fly.io + README final
 
-**Semana atual:** 6 CONCLUÍDA — RAG Agent + API SSE. Os 3 passos ✅.
-Próximo: Semana 7 (Observabilidade: LangSmith + Prometheus). PUSH pendente (main +4).
+**Semana atual:** 7 CONCLUÍDA — Observabilidade (Prometheus + LangSmith). Os 2 passos ✅.
+Próximo: Semana 8 (Deploy Fly.io + README final). PUSH pendente (main +2).
 Limpeza Semana 4 feita: settings `ragas_*` → `eval_*` (`e9fbe88`); fix CI mypy/Python 3.12 (`45a3aed`).
+
+**Semana 7 (commits `8be6843`/`a596f8d`):** Passo 1 Prometheus — `observability/metrics.py`
+(3 métricas com label `node`: duration Histogram + runs/errors Counters; `instrument_node`
+embrulha cada nó, registrado via `_add_node` no orchestrator; erro lido do PATCH não de exceção),
+`GET /metrics` (404 se desabilitado). Passo 2 LangSmith — `observability/tracing.py`
+`configure_tracing()` (Settings→env vars, chamado no create_app), correlação via `_run_config`
+(execution_id no metadata) passado em ainvoke/astream. 73 unit verdes.
 
 **Semana 6 (commits `cbbf04b`/`c950718`/`2c07670`):** Passo 1 `agents/rag.py` — 3º ramo do leque,
 casca fina sobre `retrieve_and_rerank`+`to_rag_output` (Sem.3), `_USE_HYDE=False`; orchestrator
