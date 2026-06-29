@@ -158,12 +158,18 @@ no `fly.toml` nem na imagem.
 fly launch --no-deploy
 
 # 2. Segredos (DATABASE_URL = Supabase, REDIS_URL = Upstash com rediss://)
+#    DATABASE_URL: use o "Session pooler" (porta 5432), NÃO o "Transaction pooler"
+#    (6543). O app usa asyncpg, que abre prepared statements nomeados; o pooler em
+#    modo transação (6543) troca a conexão de servidor a cada transação e os prepared
+#    statements "somem" → erros intermitentes. O Session pooler (5432) mantém a sessão
+#    presa ao cliente e ainda é IPv4. Senha SÓ alfanumérica (caracteres como @ : / ?
+#    quebram o parse da URL — o app não escapa a senha).
 fly secrets set \
   OPENAI_API_KEY=sk-... \
   TAVILY_API_KEY=tvly-... \
   LANGCHAIN_API_KEY=ls-... \
   SECRET_KEY=$(openssl rand -hex 32) \
-  DATABASE_URL='postgresql://postgres.<ref>:<senha>@aws-0-sa-east-1.pooler.supabase.com:6543/postgres' \
+  DATABASE_URL='postgresql://postgres.<ref>:<senha>@aws-0-<region>.pooler.supabase.com:5432/postgres' \
   REDIS_URL='rediss://default:<token>@<endpoint>.upstash.io:6379'
 
 # 3. Deploy — o release_command roda `alembic upgrade head` antes de subir o tráfego
