@@ -19,6 +19,7 @@ import pytest
 from finsight.agents import financial
 from finsight.agents.financial import (
     TRADING_DAYS,
+    _to_yahoo_symbol,
     compute_metrics,
     financial_node,
 )
@@ -28,6 +29,28 @@ from finsight.graph.state import FinancialOutput
 def _make_state(ticker: str = "PETR4") -> Any:
     """AgentState mínimo para o nó — só `ticker` é lido pelo financial_node."""
     return {"ticker": ticker, "query": "analise", "asset_type": "stock"}
+
+
+# ===========================================================================
+# _to_yahoo_symbol — mapeamento de ticker -> símbolo do Yahoo (puro, sem rede)
+# ===========================================================================
+
+
+@pytest.mark.parametrize(
+    ("ticker", "expected"),
+    [
+        ("PETR4", "PETR4.SA"),  # ação PN da B3
+        ("VALE3", "VALE3.SA"),  # ação ON da B3
+        ("HGLG11", "HGLG11.SA"),  # FII (4 letras + 11)
+        ("petr4", "PETR4.SA"),  # normaliza caixa antes de casar o padrão
+        ("AAPL", "AAPL"),  # ticker US (sem dígito) -> intacto
+        ("PETR4.SA", "PETR4.SA"),  # já sufixado -> não duplica
+        ("BRK.B", "BRK.B"),  # ponto explícito de outra bolsa -> respeitado
+    ],
+)
+def test_to_yahoo_symbol(ticker: str, expected: str) -> None:
+    """Tickers da B3 ganham '.SA'; os demais passam inalterados."""
+    assert _to_yahoo_symbol(ticker) == expected
 
 
 # ===========================================================================

@@ -27,6 +27,7 @@ None (o schema já permite) em vez de derrubar o grafo inteiro.
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 import numpy as np
@@ -133,6 +134,31 @@ def _last_price(prices: pd.Series) -> float | None:
     return float(prices.iloc[-1])
 
 
+# Padrão de ticker da B3 (bolsa brasileira): 4 letras + 1-2 dígitos. Cobre ações
+# ON/PN (PETR4, VALE3, ITUB4), units e FIIs (HGLG11, KNRI11). É o que distingue um
+# ticker BR de um americano (AAPL, MSFT — letras sem dígito final).
+_B3_TICKER = re.compile(r"^[A-Z]{4}\d{1,2}$")
+
+
+def _to_yahoo_symbol(ticker: str) -> str:
+    """
+    Traduz o ticker do usuário para o símbolo que o Yahoo Finance indexa.
+
+    O Yahoo lista ativos da B3 com o sufixo ".SA" (São Paulo): `PETR4` -> `PETR4.SA`.
+    SEM o sufixo, a busca volta vazia ("Quote not found for symbol: PETR4") e o nó
+    degrada para métricas None — foi exatamente o que travou o Financial em produção.
+    Anexamos ".SA" só quando o ticker casa com o padrão da B3; assim símbolos de
+    outras bolsas (AAPL) passam intactos. Um ponto já presente (ex: ".SA", ".NYSE")
+    é respeitado — não remexemos num sufixo explícito.
+    """
+    symbol = ticker.strip().upper()
+    if "." in symbol:
+        return symbol
+    if _B3_TICKER.match(symbol):
+        return f"{symbol}.SA"
+    return symbol
+
+
 def _fetch_prices(ticker: str) -> pd.Series:
     """
     Busca o histórico de 1 ano de fechamentos AJUSTADOS via yfinance.
@@ -145,7 +171,8 @@ def _fetch_prices(ticker: str) -> pd.Series:
     auto_adjust=True: usa preços ajustados por proventos/splits — obrigatório para
     o cálculo de retorno não ter saltos artificiais em datas de dividendo/split.
     """
-    history = yf.Ticker(ticker).history(period="1y", auto_adjust=True)
+    # Traduz PETR4 -> PETR4.SA (B3) antes de bater no Yahoo; ver _to_yahoo_symbol.
+    history = yf.Ticker(_to_yahoo_symbol(ticker)).history(period="1y", auto_adjust=True)
     # Ticker inexistente devolve DataFrame vazio (sem coluna "Close" garantida);
     # tratamos como série vazia -> compute_metrics devolve output "sem dados".
     if history.empty or "Close" not in history.columns:
