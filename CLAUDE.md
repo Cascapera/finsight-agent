@@ -32,14 +32,18 @@ Não teste o entendimento do Guilherme com perguntas. Se ele quiser tirar dúvid
 - [x] Semana 7: Observabilidade — Prometheus (/metrics + instrument_node) + LangSmith tracing
 - [x] Semana 8: Deploy Fly.io (fly.toml + Supabase/Upstash) + README final
 
-**Semana atual:** 8 CONCLUÍDA — Deploy + README. Os 3 passos ✅. PROJETO COMPLETO (16 sem.).
-PUSHADO (2026-06-26): main em origin, CI VERDE (run 28268027201). Nada pendente, working tree
-limpo. Reincidiu a pegadinha do `ruff format --check .` no repo TODO (igual Sem.5): 1º push
-falhou no CI (test_settings.py não formatado), fix `style:` + repush → verde. LIÇÃO p/ sempre:
-rodar `.venv/Scripts/python.exe -m ruff format --check .` (repo inteiro) ANTES de push, não só
-`ruff check`. Deploy real ao Fly ainda NÃO executado — ÚNICO passo que resta, é OPERACIONAL
-(precisa contas Supabase/Upstash + `fly secrets set` + `fly deploy`); caminho pronto e validado.
-Limpeza Semana 4 feita: settings `ragas_*` → `eval_*` (`e9fbe88`); fix CI mypy/Python 3.12 (`45a3aed`).
+**Semana atual:** PROJETO COMPLETO (16 sem.) + **DEPLOY REAL FEITO e VERIFICADO E2E** (2026-06-29).
+NO AR: **https://finsight-agent.fly.dev/** — os 4 ramos (Financial+Research+RAG+Risk) funcionando em
+produção com dados reais. Infra: Supabase (Postgres+pgvector) + Upstash (Redis TLS) + Fly (app). Tudo
+pushado, `HEAD == origin/main` (`78a7e1f`), working tree limpo. **Ver `docs/PROGRESS.md`** para o
+runbook de deploy, os fixes e o registro durável (não dependa só da memória).
+
+**Próximo passo (escolhido, NÃO iniciado): "Demo + Observabilidade"** — A) Grafana provisionado local
+(datasource+dashboard); B) `[metrics]` no fly.toml → Grafana do Fly; C) opcional LangSmith em prod.
+Detalhes em `docs/PROGRESS.md`.
+
+LIÇÃO permanente: rodar `.venv/Scripts/python.exe -m ruff format --check .` (repo INTEIRO) ANTES de
+push, não só `ruff check`. `fly` não está no PATH da sessão Bash → `export PATH="$PATH:$HOME/.fly/bin"`.
 
 **Semana 8 (commits `853c7d2`/`03ac6c5`/`af7d077`):** Passo 1 fix do container —
 `api/main.py` NOVO (re-exporta `app`+`run()`; Dockerfile ENTRYPOINT e console script
