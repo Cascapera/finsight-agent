@@ -95,9 +95,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 EXPOSE 8000
 
-# ENTRYPOINT + CMD: separação intencional
-# ENTRYPOINT: o executável — nunca muda
-# CMD: argumentos default — pode ser sobrescrito em `docker run` sem alterar o entrypoint
-# Ex: `docker run finsight-agent --workers 4` sobrescreve o CMD mantendo uvicorn
-ENTRYPOINT ["uvicorn", "finsight.api.main:app"]
-CMD ["--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Comando completo num único CMD (sem ENTRYPOINT) — exigência do Fly.io.
+# O `release_command` do fly.toml (`alembic upgrade head`) SUBSTITUI o CMD, mas
+# ANEXARIA seus argumentos a um ENTRYPOINT existente. Com `ENTRYPOINT ["uvicorn",
+# "finsight.api.main:app"]`, o release virava `uvicorn finsight.api.main:app alembic
+# upgrade head` → uvicorn morria com "unexpected extra arguments". Mantendo tudo no
+# CMD, o Fly troca o comando inteiro no release e roda o uvicorn no boot normal.
+CMD ["uvicorn", "finsight.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
