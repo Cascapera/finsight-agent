@@ -17,7 +17,9 @@ import pytest
 
 from finsight.agents import research
 from finsight.agents.research import (
+    _NEWS_QUERY_ANCHOR,
     NewsItem,
+    _build_news_query,
     _SentimentVerdict,
     analyze_sentiment,
     research_node,
@@ -36,6 +38,24 @@ def _news(n: int = 2) -> list[NewsItem]:
         NewsItem(title=f"Notícia {i}", url=f"https://news.example/{i}", content=f"corpo {i}")
         for i in range(n)
     ]
+
+
+# ---------------------------------------------------------------------------
+# _build_news_query — montagem da query (pura, sem rede)
+# ---------------------------------------------------------------------------
+
+
+def test_build_news_query_anchors_on_finance() -> None:
+    """A query ancora em termos financeiros e preserva ticker + intenção do usuário."""
+    q = _build_news_query("PETR4", "resultados do 1T26")
+    assert q.startswith("PETR4 ")  # ticker à frente
+    assert _NEWS_QUERY_ANCHOR in q  # âncora financeira presente
+    assert "resultados do 1T26" in q  # intenção do usuário preservada
+
+
+def test_build_news_query_handles_empty_query() -> None:
+    """Sem pergunta do usuário, a query é ticker + âncora, sem espaço sobrando."""
+    assert _build_news_query("VALE3", "") == f"VALE3 {_NEWS_QUERY_ANCHOR}"
 
 
 # ---------------------------------------------------------------------------

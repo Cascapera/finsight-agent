@@ -60,6 +60,15 @@ _MAX_NEWS_RESULTS = 5
 # "neutral" casa com a regex do ResearchOutput; confiança 0 sinaliza "sem base".
 _NEUTRAL_SENTIMENT = "neutral"
 
+# Termos que ANCORAM a busca no domínio financeiro. Sem eles, o código do ticker
+# (ex: PETR4) + a pergunta em linguagem natural faziam o Tavily devolver notícias
+# genéricas/irrelevantes (esporte, etc.). Mantêm a busca em "mercado/ações".
+_NEWS_QUERY_ANCHOR = "ações mercado financeiro"
+
+# Janela de recência da busca (dias). Sentimento de mercado é sobre o AGORA — limitar
+# a manchetes recentes evita notícia velha pesar no veredito.
+_NEWS_RECENCY_DAYS = 30
+
 
 # ---------------------------------------------------------------------------
 # Notícia normalizada — desacopla o resto do módulo do formato cru do Tavily
@@ -161,22 +170,37 @@ def _get_chat_client() -> ChatOpenAI:
 # ---------------------------------------------------------------------------
 
 
+def _build_news_query(ticker: str, query: str) -> str:
+    """
+    Monta a query de busca de notícias a partir do ticker e da pergunta do usuário.
+
+    Por que não `f"{ticker} {query}"` cru (o que se usava antes): o código do ticker
+    raramente aparece em manchetes e a pergunta em linguagem natural ("quais os
+    destaques...") dilui a busca com palavras interrogativas — o Tavily devolvia
+    notícias fora do domínio (esporte, etc.). Ancoramos em termos financeiros
+    explícitos para manter a busca em mercado/ações, com o ticker à frente e a
+    intenção do usuário em seguida. Pura e sem rede -> testável isoladamente.
+    """
+    return f"{ticker} {_NEWS_QUERY_ANCHOR} {query}".strip()
+
+
 def _search_news(ticker: str, query: str) -> list[NewsItem]:
     """
     Busca notícias recentes do ativo via Tavily. SÍNCRONO e bloqueante (HTTP) — por
     isso o nó o chama via `asyncio.to_thread`. Único ponto de rede de busca e, logo,
     o ponto de mock.
 
-    topic="news": pede ao Tavily o índice de notícias (não a web geral). A query
-    combina ticker + intenção do usuário para focar no ativo certo. Normalizamos o
-    dict cru em NewsItem; resultados sem URL ou título são descartados (não servem
-    nem de fonte nem de evidência).
+    topic="news": pede ao Tavily o índice de notícias (não a web geral). A query vem
+    do `_build_news_query` (ancorada em termos financeiros) e `days` limita à janela
+    recente. Normalizamos o dict cru em NewsItem; resultados sem URL ou título são
+    descartados (não servem nem de fonte nem de evidência).
     """
     client = _get_tavily_client()
     response = client.search(
-        query=f"{ticker} {query}",
+        query=_build_news_query(ticker, query),
         topic="news",
         max_results=_MAX_NEWS_RESULTS,
+        days=_NEWS_RECENCY_DAYS,
     )
     results = response.get("results", []) if isinstance(response, dict) else []
 
